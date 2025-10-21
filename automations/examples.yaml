@@ -1,0 +1,41 @@
+---
+- name: pr_open_create_task
+  enabled: true
+  trigger: github.pr_opened
+  action: tasks.create
+  mapping:
+    title: "PR: {{pr.title}}"
+    description: "{{pr.url}}"
+    tags: ["github", "pr"]
+
+- name: due_alert_slack
+  enabled: true
+  trigger: 'scheduler.cron("*/5 * * * *")'
+  condition: 'now() > task.due_at - "1h" and task.state != "done"'
+  action: slack.notify
+  args:
+    channel: '@assignees'
+    text: 'Vence em 1h: {{task.title}}'
+
+- name: email_bug_p1
+  enabled: true
+  trigger: 'email.inbox(match: "subject:/\\bbug\\b/i")'
+  action: tasks.create_with_sla
+  args:
+    policy: 'P1_4h'
+
+- name: review_channel
+  enabled: true
+  trigger: 'task.state_changed(to: "in_review")'
+  action: slack.notify
+  args:
+    channel: '#code-review'
+    text: 'Revisar: {{task.link}}'
+
+- name: assign_command
+  enabled: true
+  trigger: 'comment.created(match: "^/assign\\s+@(?P<user>\\w+)")'
+  action: tasks.assign
+  args:
+    user: '${user}'
+

@@ -1,0 +1,31 @@
+tiers:
+  economy:
+    provider: ollama
+    local_models: ["qwen3:8b","qwen3:14b"]
+  balanced:
+    provider: openai
+    cloud_models: ["gpt-5-nano","gpt-5-mini","gpt-5-codex"]
+  quality:
+    provider: openai
+    cloud_models: ["gpt-5-high"]
+
+judgement:
+  # Usa LLM rápido quando disponível; cai para heurística se indisponível
+  model: "${JUDGE_MODEL:-gpt-5-nano}"
+  timeout_ms: 1500
+
+thresholds:
+  docs:
+    small_tokens: 600
+    medium_tokens: 3000
+  code:
+    small_tokens: 400
+    medium_tokens: 2000
+
+timeouts_ms:
+  ollama_generate: 20000
+  cloud_chat: 25000
+  embeddings: 30000
+
+limits:
+  max_input_chars: 24000

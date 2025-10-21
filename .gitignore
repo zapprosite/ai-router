@@ -1,0 +1,6 @@
+/.venv/
+/.pytest_cache/
+/__pycache__/
+/REPO_TREE.txt
+/.backup_docs_*/
+.env
