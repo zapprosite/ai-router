@@ -1,0 +1,11 @@
+{
+  "name": "ai-router-tests",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.48.2"
+  },
+  "scripts": {
+    "smoke": "playwright test -c . --reporter=line"
+  }
+}

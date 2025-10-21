@@ -355,3 +355,161 @@ Flagd
 59. Pricing Free/Pro/Enterprise e limites.  
 60. GA: migração, comunicação e runbooks.
 
+
+## 22) Anexos consolidados
+
+### 22.1 Modelo de dados (tabelado)
+| Entidade | Campos chave | Índices/FKs |
+|---|---|---|
+| Organization | id, name, plan, created_at | PK(id) |
+| User | id, org_id, email, name, locale, role | PK(id), FK(org_id), IDX(org_id), UNIQUE(org_id,email) |
+| Project | id, org_id, key, name | PK(id), FK(org_id), UNIQUE(org_id,key) |
+| Board | id, project_id, name, view_type | PK(id), FK(project_id) |
+| Sprint | id, project_id, name, start_at, end_at, capacity | PK(id), FK(project_id), IDX(project_id,start_at,end_at) |
+| Epic | id, project_id, title, status | PK(id), FK(project_id), IDX(project_id,status) |
+| Task | id, project_id, epic_id?, sprint_id?, title, description, state, priority, assignees[], reporter, due_at, estimate, sla_policy_id? | PK(id), FK(project_id,epic_id,sprint_id), GIN(assignees,tags), IDX(project_id,state,due_at) |
+| Comment | id, task_id, author_id, body, created_at | PK(id), FK(task_id,author_id), IDX(task_id,created_at) |
+| Attachment | id, task_id, url, mime, size | PK(id), FK(task_id), IDX(task_id) |
+| Tag | id, org_id, key, name, color | PK(id), FK(org_id), UNIQUE(org_id,key) |
+| TaskTag | task_id, tag_id | PK(task_id,tag_id), FK(task_id,tag_id) |
+| Automation | id, project_id, name, trigger, condition, action, enabled | PK(id), FK(project_id), IDX(project_id,enabled) |
+| Notification | id, user_id, chan, payload, status, created_at | PK(id), FK(user_id), IDX(user_id,status,created_at) |
+| AuditLog | id, org_id, actor_id, action, entity, entity_id, data, at | PK(id), FK(org_id,actor_id), IDX(org_id,at), IDX(entity,entity_id) |
+
+### 22.2 Endpoints REST (principais)
+| Método | Caminho | Descrição |
+|---|---|---|
+| POST | /v1/tasks | Criar tarefa |
+| GET | /v1/tasks | Listar + filtros (project_id, state, assignee, tag, due_at) |
+| GET | /v1/tasks/{id} | Detalhar tarefa |
+| PATCH | /v1/tasks/{id} | Atualizar campos |
+| POST | /v1/tasks/{id}/comments | Comentar |
+| POST | /v1/automations | Criar regra if/then |
+| GET | /v1/automations | Listar regras |
+| POST | /v1/mcp/tools/{tool}/call | Proxy MCP autorizado |
+| GET | /v1/models | Model list (local+cloud) |
+| POST | /v1/embeddings | Embeddings |
+| GET | /healthz | Health check |
+
+Exemplo `POST /v1/tasks`:
+```json
+{
+  "project_id": "p_123",
+  "title": "Adicionar validação de SLA",
+  "description": "…",
+  "assignees": ["u_45"],
+  "tags": ["SLA","backend"],
+  "due_at": "2025-10-30T23:59:00Z"
+}
+22.3 GraphQL (SDL recorte)
+graphql
+￼Copiar código
+enum TaskState { BACKLOG TODO DOING IN_REVIEW DONE BLOCKED }
+
+type User { id: ID!, name: String!, email: String! }
+type Tag { id: ID!, key: String!, name: String!, color: String }
+scalar DateTime
+
+type Task {
+  id: ID!
+  projectId: ID!
+  title: String!
+  description: String
+  state: TaskState!
+  priority: Int
+  assignees: [User!]!
+  epicId: ID
+  sprintId: ID
+  dueAt: DateTime
+  estimate: Int
+  tags: [Tag!]!
+}
+
+type Project { id: ID!, key: String!, name: String! }
+
+input AutomationInput { projectId: ID!, name: String!, trigger: String!, condition: String, action: String!, enabled: Boolean! }
+
+type Automation { id: ID!, projectId: ID!, name: String!, enabled: Boolean! }
+
+type Query {
+  task(id: ID!): Task
+  tasks(projectId: ID, state: TaskState, tag: String, assignee: ID): [Task!]!
+}
+
+type Mutation {
+  createTask(projectId: ID!, title: String!, description: String): Task!
+  createAutomation(input: AutomationInput!): Automation!
+}
+22.4 Automações MCP (pseudo-YAML, 5 receitas)
+yaml
+￼Copiar código
+- name: pr_open_create_task
+  trigger: github.pr_opened
+  action: tasks.create
+  mapping: {title: "PR: {{pr.title}}", description: "{{pr.url}}", tags: ["github","pr"]}
+
+- name: due_alert_slack
+  trigger: scheduler.cron("*/5 * * * *")
+  condition: now() > task.due_at - "1h" and task.state != "DONE"
+  action: slack.notify(@assignees, "Vence em 1h: {{task.title}}")
+
+- name: email_bug_p1
+  trigger: email.inbox(match: "subject:/\\bbug\\b/i")
+  action: tasks.create_with_sla("P1_4h")
+
+- name: review_channel
+  trigger: task.state_changed(to: "IN_REVIEW")
+  action: slack.notify("#code-review", "Revisar: {{task.link}}")
+
+- name: assign_command
+  trigger: comment.created(match: "^/assign\\s+@(?P<user>\\w+)")
+  action: tasks.assign("${user}")
+22.5 Plano de testes e SLOs
+SLOs: uptime 99,9%; p95 API ≤ 300 ms; cold start Web < 2 s.
+Testes:
+
+Unitários: serviços e validadores (≥80% core).
+
+Integração: CRUD tasks, comentários, automações MCP em sandbox.
+
+Carga (k6): /healthz e /v1/models p95<300ms; /v1/tasks lista 200 RPS p95<300ms; erro<0,5%.
+
+DAST (ZAP): 0 High.
+
+Segurança: assinatura HMAC webhooks, SSRF deny RFC1918.
+
+22.6 Matriz RACI (resumo)
+Entrega	PM	Eng	DevOps/SRE	Security	CX	Exec
+PRD & Roadmap	R	C	I	I	C	A
+Backend APIs	C	R	C	I	I	I
+Frontend & UX	R	R	I	I	C	I
+MCP Connectors	C	R	C	C	I	I
+Observabilidade	I	C	R	I	I	I
+Segurança & Compliance	C	I	C	R	I	I
+Release GA	A	R	R	C	C	A
+￼
+22.7 Riscos e mitigação
+Risco	Impacto	Prob.	Mitigação
+Limites de APIs externas	Alto	Médio	Fila + backoff + circuit-breaker; quotas por plano
+Custo de busca/LLM	Médio	Médio	Cache, compressão, roteamento local-first
+Complexidade de workflows	Médio	Médio	Temporal + testes de replays
+Segurança MCP/webhooks	Alto	Baixo	HMAC, allow-list HTTP, RBAC mínimo
+Vazamento de dados	Alto	Baixo	Criptografia, logs sem PII, auditoria e DLP
+Latência p95 > 300ms	Médio	Médio	Indexação, tuning DB/cache, k6 contínuo
+￼
+22.8 Checklist de prontidão para build
+￼ OpenAPI 3.1 publicada e validada
+
+￼ RBAC Keycloak por projeto
+
+￼ 10+ receitas MCP validadas end-to-end
+
+￼ OTel + Prometheus + dashboards Grafana
+
+￼ k6: p95 ≤ 300 ms nas rotas alvo
+
+￼ ZAP: sem achados High
+
+￼ Backups Postgres + restore testado
+
+￼ Flags via OpenFeature/flagd em prod

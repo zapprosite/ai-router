@@ -1,14 +1,12 @@
+# idempotency_key: ai-router-compose-normalize-2025-10-21-v2
+
 services:
   ai-router:
-    build: .
-    env-file: /srv-2/secrets/ai-stack/ai-stack.env
+    build:
+      context: .
     image: ai-router:local
     env_file:
       - /srv-2/secrets/ai-stack/ai-stack.env
     ports:
       - "8082:8082"
-    command: >
-      uvicorn app:app
-      --host 0.0.0.0 --port 8082
-      --log-level debug --access-log --proxy-headers
     restart: unless-stopped
