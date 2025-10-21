@@ -1,7 +1,7 @@
-<!-- idempotency_key: readme-gh-final-2025-10-21-v1 -->
+<!-- idempotency_key: readme-gh-clean-2025-10-21-v1 -->
 # AI Router · Hybrid LLM Orchestrator
 
-A lightweight router that picks the **most cost-effective LLM** per request. It balances **local GPU models** and **cloud models** based on task type, token size, and latency/cost targets.
+A lightweight router that picks the **most cost-effective LLM** per request. It balances **local GPU models** and **cloud models** using task type, token size, and latency/cost targets.
 
 <p align="left">
   <img alt="Status" src="https://img.shields.io/badge/status-alpha-blue.svg">
@@ -9,16 +9,14 @@ A lightweight router that picks the **most cost-effective LLM** per request. It 
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-FastAPI%20%7C%20Uvicorn-1f425f.svg">
 </p>
 
----
-
 ## Why
-Not every prompt needs an expensive cloud model. Simple and short prompts go to local Qwen on GPU. Complex or large prompts go to cloud models. The goal is a stable p95 latency and predictable spend.
+Not every prompt needs an expensive cloud model. Short, simple prompts go to local Qwen on GPU. Complex or large prompts go to cloud models. The goal is stable p95 latency and predictable spend.
 
 ## Features
-- Hybrid routing (GPU ↔ cloud) with model tiers.
-- Simple classification by task type and token count.
-- OpenAI-compatible surface kept minimal.
-- Structured logs and k6 smoke tests.
+- Hybrid routing (GPU ↔ cloud) with model tiers
+- Simple classification by task type and token count
+- Minimal OpenAI-compatible surface
+- Structured logs and k6 smoke tests
 
 ## Current Endpoints
 - `GET /healthz` → `{"ok": true}`
@@ -34,7 +32,7 @@ ai-router/
 ├─ tests/
 │ └─ k6_models.js
 └─ docs/
-├─ PRD_TASK_MASTER.md # product doc (project scope and phases)
+├─ PRD_TASK_MASTER.md # product doc (scope and phases)
 ├─ AGENTS.md # agent rules and routing policy
 ├─ GOVERNANCE.md # ops & security policy
 ├─ ARCHITECTURE.md # components and data flow
@@ -70,20 +68,20 @@ docker run --rm --network host \
   -e BASE_URL=http://localhost:8082 \
   -v ./tests:/scripts:ro grafana/k6 run /scripts/k6_models.js
 Governance
-Minimal OpenAI-compat surface first.
+Minimal OpenAI-compat surface first
 
-No secrets in logs. No PII. Env only via /srv-2/secrets/ai-stack/ai-stack.env.
+No secrets in logs. No PII. Env only via /srv-2/secrets/ai-stack/ai-stack.env
 
-Idempotent patches with explicit keys and reviewable diffs.
+Idempotent patches with explicit keys and reviewable diffs
 
 Roadmap
-Router scoring with feedback loop (cost/latency/quality).
+Router scoring with feedback loop (cost/latency/quality)
 
-/v1/chat/completions.
+/v1/chat/completions
 
-Dry-run route preview endpoint for CI.
+Dry-run route preview endpoint for CI
 
-Adaptive policy per org/project.
+Adaptive policy per org/project
 
 License
 MIT © 2025 William Rodrigues / AI-Stack
