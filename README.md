@@ -1,4 +1,4 @@
-<!-- idempotency_key: readme-gh-clean-2025-10-21-v1 -->
+<!-- idempotency_key: readme-gh-links-2025-10-21-v1 -->
 # AI Router · Hybrid LLM Orchestrator
 
 A lightweight router that picks the **most cost-effective LLM** per request. It balances **local GPU models** and **cloud models** using task type, token size, and latency/cost targets.
@@ -32,14 +32,22 @@ ai-router/
 ├─ tests/
 │ └─ k6_models.js
 └─ docs/
-├─ PRD_TASK_MASTER.md # product doc (scope and phases)
-├─ AGENTS.md # agent rules and routing policy
-├─ GOVERNANCE.md # ops & security policy
-├─ ARCHITECTURE.md # components and data flow
-└─ FRONTEND_INTEGRATION.md # UI/UX integration guide
+├─ PRD_TASK_MASTER.md
+├─ AGENTS.md
+├─ GOVERNANCE.md
+├─ ARCHITECTURE.md
+└─ FRONTEND_INTEGRATION.md
 
 ruby
 ￼Copiar código
+
+## Documentation
+- PRD: [docs/PRD_TASK_MASTER.md](docs/PRD_TASK_MASTER.md)  
+- Agents & Routing Policy: [docs/AGENTS.md](docs/AGENTS.md)  
+- Governance: [docs/GOVERNANCE.md](docs/GOVERNANCE.md)  
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)  
+- Frontend Integration Guide: [docs/FRONTEND_INTEGRATION.md](docs/FRONTEND_INTEGRATION.md)  
+- Env template: [docs/ai-stack.env.example](docs/ai-stack.env.example)
 
 ## Routing Policy (initial)
 | Task | Tokens | Complexity | Route | Example model |
