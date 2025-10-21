@@ -1,10 +1,11 @@
-# idempotency_key: gh-actions-ci-2025-10-21-v1
+# idempotency_key: gh-actions-ci-2025-10-21-v2
 name: CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   smoke:
