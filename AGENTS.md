@@ -45,4 +45,13 @@ Cabeçalho: `[route:{local|cloud}] [model:{id}] [task:{code|docs}] [complexity:{
 7) Sugerir próximo passo curto
 
 ## Segurança
-Segredos: `/srv-2/secrets/ai-stack/ai-stack.env`. HTTP tool com allow-list; bloquear RFC1918; HMAC em webhooks; respeitar RBAC; sem PII em logs.
+Segredos: `/srv2/secrets/ai-stack/ai-stack.env`. HTTP tool com allow-list; bloquear RFC1918; HMAC em webhooks; respeitar RBAC; sem PII em logs.
+
+## Paths MCP (padrão)
+- Fonte de verdade: `/srv/projects/ai-router`.
+- MCP filesystem lê: `/home/will/ai-router` (bind para o diretório canônico).
+- BOOT deve ler:
+  - `/home/will/ai-router/PRD_TASK_MASTER.md`
+  - `/home/will/ai-router/AGENTS.md`
+  - `/home/will/ai-router/README.md`
+- Nunca gravar fora do bind. Operações de Docker/CI referenciam `/srv/projects/ai-router`.

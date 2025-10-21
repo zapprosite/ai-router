@@ -1,6 +1,55 @@
-/.venv/
-/.pytest_cache/
-/__pycache__/
-/REPO_TREE.txt
-/.backup_docs_*/
+# --- Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.cache/
+.pytest_cache/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Node / Playwright (tests)
+node_modules/
+playwright-report/
+test-results/
+npm-debug.log*
+yarn-error.log*
+
+# --- Logs e artefatos
+logs/
+*.log
+*.pid
+
+# --- Secrets e env (exemplo permanece versionado em docs/)
+*.env
+*.env.*
 .env
+.envrc
+!docs/ai-stack.env.example
+
+# --- Docker
+docker-compose.override.yml
+
+# --- IDE / SO
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Chaves/Certs
+*.pem
+*.key
+*.crt
+
+# --- Jupyter
+.ipynb_checkpoints/

@@ -17,5 +17,14 @@ Documentos únicos:
 - `GET /v1/models` → lista de modelos locais/cloud quando disponíveis
 
 ### Segurança e segredos
-- Somente via `/srv-2/secrets/ai-stack/ai-stack.env`. Não exibir nem logar.
+- Somente via `/srv2/secrets/ai-stack/ai-stack.env`. Não exibir nem logar.
 # ai-router
+
+## Governança de caminhos
+- **Canônico**: `/srv/projects/ai-router` (única fonte de verdade).
+- **Compatibilidade MCP**: o servidor `filesystem` enxerga `/home/will`. Expomos o repositório via **bind**:
+  - `sudo /usr/local/bin/mcp_bind_repo.sh` cria/garante `/home/will/ai-router -> /srv/projects/ai-router`.
+- **Regras**:
+  - Comandos de Docker/CI/dev usam **/srv**.
+  - O **codex CLI** (MCP filesystem) referencia **/home/will/ai-router**.
+  - Não manter cópias; o bind reflete o conteúdo de **/srv**.

@@ -1,6 +1,7 @@
 services:
   ai-router:
     build: .
+    env-file: /srv-2/secrets/ai-stack/ai-stack.env
     image: ai-router:local
     env_file:
       - /srv-2/secrets/ai-stack/ai-stack.env
