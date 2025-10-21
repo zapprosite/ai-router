@@ -1,0 +1,40 @@
+# idempotency_key: gh-actions-ci-2025-10-21-v1
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prep env file path used by compose
+        run: |
+          sudo mkdir -p /srv-2/secrets/ai-stack
+          sudo tee /srv-2/secrets/ai-stack/ai-stack.env >/dev/null <<'E'
+          # minimal CI env; keep empty unless needed by app
+          E
+
+      - name: Docker Compose up
+        run: |
+          docker compose -f docker-compose.yml up -d --build ai-router
+          echo "Waiting healthz..."
+          for i in {1..60}; do
+            curl -fsS http://localhost:8082/healthz && break || sleep 1
+          done
+
+      - name: Verify endpoints
+        run: |
+          curl -fsS http://localhost:8082/healthz | python3 -m json.tool
+          curl -fsS http://localhost:8082/v1/models | python3 -m json.tool
+
+      - name: k6 smoke
+        run: |
+          docker run --rm --network host \
+            -e BASE_URL=http://localhost:8082 \
+            -v ${{ github.workspace }}/tests:/scripts:ro \
+            grafana/k6 run /scripts/k6_models.js
