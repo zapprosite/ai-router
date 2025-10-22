@@ -1,4 +1,4 @@
-# idempotency_key: gh-actions-ci-smoke-2025-10-21-v3
+# idempotency_key: gh-actions-ci-smoke-2025-10-22-net-v1
 name: CI Smoke
 on:
   workflow_dispatch: {}
@@ -30,6 +30,14 @@ jobs:
           docker compose -f docker-compose.yml up -d --build ai-router
           for i in {1..60}; do curl -fsS http://localhost:8082/healthz && break || sleep 1; done
 
+      - name: Detect compose network
+        shell: bash
+        run: |
+          set -euo pipefail
+          CID=$(docker compose -f docker-compose.yml ps -q ai-router)
+          NET=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$CID")
+          echo "NET=$NET" >> "$GITHUB_ENV"
+
       - name: Verify endpoints
         shell: bash
         run: |
@@ -37,60 +45,56 @@ jobs:
           curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
           curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
 
-      - name: Install k6 (APT)
+      - name: k6 via container (compose network)
         shell: bash
         run: |
-          set -euxo pipefail
-          sudo apt-get update -y
-          sudo apt-get install -y ca-certificates gnupg
-          sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6-archive-keyring.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
-          sudo apt-get update -y
-          sudo apt-get install -y k6
-          k6 version
-
-      - name: k6 smoke (never fail; capture summary)
-        env:
-          BASE_URL: http://localhost:8082
-          K6_SUMMARY_TREND_STATS: avg,min,med,max,p(90),p(95),p(99)
-        shell: bash
-        run: |
-          set +e
-          OUT="${GITHUB_WORKSPACE}/.ci-out"; mkdir -p "$OUT"
-          k6 run --summary-export="${OUT}/k6_models.json" tests/k6_models.js | tee "${OUT}/k6_stdout.log"
-          echo $? > "${OUT}/k6_rc.txt"
-          set -e
-          test -s "${OUT}/k6_models.json" || echo '{}' > "${OUT}/k6_models.json"
+          set -euo pipefail
+          docker run --rm --network "$NET" \
+            -e BASE_URL=http://ai-router:8082 \
+            -v "${{ github.workspace }}/tests:/scripts:ro" \
+            -v "${{ runner.temp }}:/out" \
+            grafana/k6 run --summary-export /out/k6_models.json /scripts/k6_models.js | tee "$RUNNER_TEMP/k6_stdout.log"
 
       - name: Collect logs
         if: always()
         shell: bash
         run: |
-          set -euxo pipefail
+          set -euo pipefail
+          docker compose -f docker-compose.yml ps > "$RUNNER_TEMP/compose_ps.txt" || true
+          docker compose -f docker-compose.yml logs --no-color > "$RUNNER_TEMP/compose.log" || true
           CID="$(docker compose -f docker-compose.yml ps -q ai-router || true)"
-          if [ -n "$CID" ]; then docker logs "$CID" > /tmp/router.log || true; fi
-          docker compose -f docker-compose.yml logs ai-router > /tmp/compose.log || true
+          [ -n "$CID" ] && docker logs "$CID" > "$RUNNER_TEMP/router.log" || true
 
-      - name: Upload artifacts
+      - name: Upload artifacts (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-artifacts
-          if-no-files-found: error
+          retention-days: 7
+          if-no-files-found: warn
           path: |
-            ${{ github.workspace }}/.ci-out/**
-            /tmp/router.log
-            /tmp/compose.log
-            /tmp/healthz.json
-            /tmp/models.json
+            ${{ runner.temp }}/k6_models.json
+            ${{ runner.temp }}/k6_stdout.log
+            ${{ runner.temp }}/healthz.json
+            ${{ runner.temp }}/models.json
+            ${{ runner.temp }}/compose.log
+            ${{ runner.temp }}/router.log
+            ${{ runner.temp }}/compose_ps.txt
 
-      - name: Gate thresholds (fail after upload)
+      - name: Gate p95 < 1200ms (with fallback)
         shell: bash
         run: |
-          set -euxo pipefail
-          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"] // 1e9' "${GITHUB_WORKSPACE}/.ci-out/k6_models.json")"
-          awk 'BEGIN{exit !( '"${P95}"' < 1200 ) }'
+          set -euo pipefail
+          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"]' "$RUNNER_TEMP/k6_models.json" 2>/dev/null || true)"
+          if [ -z "${P95:-}" ] || [ "$P95" = "null" ]; then
+            L=$(grep -E '^\s*\{ *ep:models *\}.*p\(95\)=' "$RUNNER_TEMP/k6_stdout.log" | tail -1 || true)
+            V=$(printf '%s\n' "$L" | sed -E 's/.*p\(95\)=([0-9.]+)(µs|ms).*/\1 \2/' || true)
+            VAL=$(printf '%s' "$V" | awk '{print $1}')
+            UNIT=$(printf '%s' "$V" | awk '{print $2}')
+            if [ "${UNIT:-}" = "µs" ]; then P95=$(awk -v x="${VAL:-0}" 'BEGIN{printf "%.3f", x/1000}'); else P95="${VAL:-}"; fi
+          fi
+          echo "p95_ms=${P95:-NA}"
+          [ -n "${P95:-}" ] && awk -v v="$P95" 'BEGIN{if (v+0<1200) exit 0; exit 1}'
 
       - name: Teardown
         if: always()
