@@ -1,3 +1,5 @@
+[![CI Smoke](https://github.com/zapprosite/ai-router/actions/workflows/ci_smoke.yml/badge.svg?branch=main)](https://github.com/zapprosite/ai-router/actions/workflows/ci_smoke.yml)
+
 <!-- idempotency_key: readme-gh-links-2025-10-21-v1 -->
 # AI Router · Hybrid LLM Orchestrator
 
