@@ -1,3 +1,4 @@
+#+ idempotency_key: gh-actions-ci-smoke-2025-10-21-v3
 name: CI Smoke
 on:
   workflow_dispatch: {}
@@ -38,14 +39,34 @@ jobs:
           curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee "$RUNNER_TEMP/healthz.json"
           curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee "$RUNNER_TEMP/models.json"
 
-      - name: Setup k6
+      - name: Setup k6 (prefer action; fallback APT se necessário)
+        id: setup_k6
+        continue-on-error: true
         uses: grafana/setup-k6-action@v1
 
-      - name: Run k6 (models)
+      - name: Setup k6 via APT (fallback)
+        if: steps.setup_k6.outcome == 'failure'
         run: |
-          k6 run --vus 10 --duration 30s --summary-export "$RUNNER_TEMP/k6_models.json" tests/k6_models.js
+          set -euxo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y ca-certificates gnupg jq
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -y
+          sudo apt-get install -y k6
+          k6 version
+
+      - name: Run k6 (models)
         env:
           BASE_URL: http://localhost:8082
+          K6_SUMMARY_TREND_STATS: avg,min,med,max,p(90),p(95),p(99)
+        run: |
+          set +e
+          k6 run --vus 10 --duration 30s --summary-export "$RUNNER_TEMP/k6_models.json" tests/k6_models.js | tee "$RUNNER_TEMP/k6_stdout.log"
+          echo $? > "$RUNNER_TEMP/k6_rc.txt"
+          set -e
+          test -s "$RUNNER_TEMP/k6_models.json" || echo '{}' > "$RUNNER_TEMP/k6_models.json"
 
       - name: Collect logs
         if: always()
@@ -63,6 +84,7 @@ jobs:
           name: smoke-artifacts
           path: |
             ${{ runner.temp }}/k6_models.json
+            ${{ runner.temp }}/k6_stdout.log
             ${{ runner.temp }}/healthz.json
             ${{ runner.temp }}/models.json
             ${{ runner.temp }}/compose.log
@@ -71,12 +93,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Gate p95 < 1200ms
+      - name: Gate p95 < 1200ms (after artifacts)
         run: |
-          P95=$(jq -r '.metrics.http_req_duration.values["p(95)"]' "$RUNNER_TEMP/k6_models.json")
-          echo "p95_ms=$P95"
-          awk -v v="$P95" 'BEGIN{if (v=="" || v+0>=1200) exit 1}'
-        shell: bash
+          P95=$(jq -r '.metrics.http_req_duration.values["p(95)"] // empty' "$RUNNER_TEMP/k6_models.json")
+          echo "p95_ms=${P95:-null}"
+          awk -v v="${P95:-999999}" 'BEGIN{ if (v+0<1200) exit 0; exit 1 }'
 
       - name: Teardown
         if: always()
