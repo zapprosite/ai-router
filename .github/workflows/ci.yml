@@ -1,4 +1,4 @@
-# idempotency_key: gh-actions-ci-2025-10-21-v6
+# idempotency_key: gh-actions-ci-2025-10-21-v8
 name: CI
 on:
   push:
@@ -39,20 +39,27 @@ jobs:
           curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
           curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
 
-      - name: k6 smoke (export summary to host)
+      - name: Setup k6
+        uses: grafana/setup-k6@v1
+        with:
+          version: v0.50.0
+
+      - name: k6 smoke
+        env:
+          BASE_URL: http://localhost:8082
+          K6_SUMMARY_TREND_STATS: avg,min,med,max,p(90),p(95),p(99)
         run: |
           set -euxo pipefail
           OUT="${GITHUB_WORKSPACE}/.ci-out"
           mkdir -p "$OUT"
-          docker run --rm --network host \
-            -e BASE_URL=http://localhost:8082 \
-            -e K6_SUMMARY_TREND_STATS="avg,min,med,max,p(90),p(95),p(99)" \
-            -v "${GITHUB_WORKSPACE}/tests:/scripts:ro" \
-            -v "${OUT}:/out" \
-            grafana/k6:0.50.0 run --summary-export=/out/k6_models.json /scripts/k6_models.js
+          k6 run --summary-export="${OUT}/k6_models.json" tests/k6_models.js
           ls -l "$OUT"
           test -s "${OUT}/k6_models.json"
 
+      - name: Collect logs
+        if: always()
+        run: |
+          set -euxo pipefail
           CID="$(docker compose -f docker-compose.yml ps -q ai-router || true)"
           if [ -n "$CID" ]; then docker logs "$CID" > /tmp/router.log || true; fi
           docker compose -f docker-compose.yml logs ai-router > /tmp/compose.log || true
