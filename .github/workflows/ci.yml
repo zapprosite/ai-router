@@ -1,11 +1,17 @@
-# idempotency_key: gh-actions-ci-2025-10-21-v2
+# idempotency_key: gh-actions-ci-2025-10-21-v3
 name: CI
-
 on:
   push:
     branches: [ main ]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
@@ -24,18 +30,35 @@ jobs:
         run: |
           docker compose -f docker-compose.yml up -d --build ai-router
           echo "Waiting healthz..."
-          for i in {1..60}; do
-            curl -fsS http://localhost:8082/healthz && break || sleep 1
-          done
+          for i in {1..60}; do curl -fsS http://localhost:8082/healthz && break || sleep 1; done
 
       - name: Verify endpoints
         run: |
-          curl -fsS http://localhost:8082/healthz | python3 -m json.tool
-          curl -fsS http://localhost:8082/v1/models | python3 -m json.tool
+          curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
+          curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
 
       - name: k6 smoke
         run: |
           docker run --rm --network host \
             -e BASE_URL=http://localhost:8082 \
-            -v ${{ github.workspace }}/tests:/scripts:ro \
-            grafana/k6 run /scripts/k6_models.js
+            -v "${GITHUB_WORKSPACE}/tests:/scripts:ro" \
+            grafana/k6 run --summary-export=/tmp/k6_models.json /scripts/k6_models.js
+          CID="$(docker compose -f docker-compose.yml ps -q ai-router || true)"
+          if [ -n "$CID" ]; then docker logs "$CID" > /tmp/router.log || true; fi
+          docker compose -f docker-compose.yml logs ai-router > /tmp/compose.log || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: |
+            /tmp/k6_models.json
+            /tmp/router.log
+            /tmp/compose.log
+            /tmp/healthz.json
+            /tmp/models.json
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v || true
