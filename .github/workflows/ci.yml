@@ -1,9 +1,10 @@
-# idempotency_key: gh-actions-ci-2025-10-21-v10
+# idempotency_key: gh-actions-ci-2025-10-21-v11
 name: CI
 on:
-  push: { branches: [ main ] }
-  pull_request:
-  workflow_dispatch:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+  pull_request: {}
 
 permissions: { contents: read }
 concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
