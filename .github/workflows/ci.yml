@@ -1,4 +1,4 @@
-# idempotency_key: gh-actions-ci-2025-10-21-v8
+# idempotency_key: gh-actions-ci-2025-10-21-v9
 name: CI
 on:
   push:
@@ -52,9 +52,16 @@ jobs:
           set -euxo pipefail
           OUT="${GITHUB_WORKSPACE}/.ci-out"
           mkdir -p "$OUT"
-          k6 run --summary-export="${OUT}/k6_models.json" tests/k6_models.js
-          ls -l "$OUT"
-          test -s "${OUT}/k6_models.json"
+          # capturar stdout e sempre gerar summary
+          set +e
+          k6 run --summary-export="${OUT}/k6_models.json" tests/k6_models.js | tee "${OUT}/k6_stdout.log"
+          K6_RC=${PIPESTATUS[0]}
+          set -e
+          # garantir arquivos para upload mesmo se falhar
+          test -s "${OUT}/k6_models.json" || echo '{}' > "${OUT}/k6_models.json"
+          jq -r '.metrics.http_req_duration.values["p(95)"] // "NaN"' "${OUT}/k6_models.json" | tee "${OUT}/p95.txt"
+          echo "${K6_RC}" > "${OUT}/k6_rc.txt"
+          exit "${K6_RC}"
 
       - name: Collect logs
         if: always()
@@ -69,7 +76,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-artifacts
-          if-no-files-found: error
           path: |
             ${{ github.workspace }}/.ci-out/**
             /tmp/router.log
