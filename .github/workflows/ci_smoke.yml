@@ -1,17 +1,12 @@
-# idempotency_key: gh-actions-ci-smoke-2025-10-21-v2
+# idempotency_key: gh-actions-ci-smoke-2025-10-21-v3
 name: CI Smoke
 on:
   workflow_dispatch: {}
-  push:
-    branches: [ main ]
+  push: { branches: [ main ] }
   pull_request: {}
 
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-smoke-${{ github.ref }}
-  cancel-in-progress: true
+permissions: { contents: read }
+concurrency: { group: ci-smoke-${{ github.ref }}, cancel-in-progress: true }
 
 jobs:
   smoke:
@@ -42,10 +37,18 @@ jobs:
           curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
           curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
 
-      - name: Setup k6
-        uses: grafana/setup-k6@v1
-        with:
-          version: v0.50.0
+      - name: Install k6 (APT)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y ca-certificates gnupg
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -y
+          sudo apt-get install -y k6
+          k6 version
 
       - name: k6 smoke (never fail; capture summary)
         env:
@@ -81,6 +84,13 @@ jobs:
             /tmp/compose.log
             /tmp/healthz.json
             /tmp/models.json
+
+      - name: Gate thresholds (fail after upload)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"] // 1e9' "${GITHUB_WORKSPACE}/.ci-out/k6_models.json")"
+          awk 'BEGIN{exit !( '"${P95}"' < 1200 ) }'
 
       - name: Teardown
         if: always()
