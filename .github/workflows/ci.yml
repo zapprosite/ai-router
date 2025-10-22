@@ -1,4 +1,4 @@
-# idempotency_key: gh-actions-ci-2025-10-21-v3
+# idempotency_key: gh-actions-ci-2025-10-21-v6
 name: CI
 on:
   push:
@@ -21,6 +21,7 @@ jobs:
 
       - name: Prep env file path used by compose
         run: |
+          set -euxo pipefail
           sudo mkdir -p /srv-2/secrets/ai-stack
           sudo tee /srv-2/secrets/ai-stack/ai-stack.env >/dev/null <<'E'
           # minimal CI env; keep empty unless needed by app
@@ -28,21 +29,30 @@ jobs:
 
       - name: Docker Compose up
         run: |
+          set -euxo pipefail
           docker compose -f docker-compose.yml up -d --build ai-router
-          echo "Waiting healthz..."
           for i in {1..60}; do curl -fsS http://localhost:8082/healthz && break || sleep 1; done
 
       - name: Verify endpoints
         run: |
+          set -euxo pipefail
           curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
           curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
 
-      - name: k6 smoke
+      - name: k6 smoke (export summary to host)
         run: |
+          set -euxo pipefail
+          OUT="${GITHUB_WORKSPACE}/.ci-out"
+          mkdir -p "$OUT"
           docker run --rm --network host \
             -e BASE_URL=http://localhost:8082 \
+            -e K6_SUMMARY_TREND_STATS="avg,min,med,max,p(90),p(95),p(99)" \
             -v "${GITHUB_WORKSPACE}/tests:/scripts:ro" \
-            grafana/k6 run --summary-export=/tmp/k6_models.json /scripts/k6_models.js
+            -v "${OUT}:/out" \
+            grafana/k6:0.50.0 run --summary-export=/out/k6_models.json /scripts/k6_models.js
+          ls -l "$OUT"
+          test -s "${OUT}/k6_models.json"
+
           CID="$(docker compose -f docker-compose.yml ps -q ai-router || true)"
           if [ -n "$CID" ]; then docker logs "$CID" > /tmp/router.log || true; fi
           docker compose -f docker-compose.yml logs ai-router > /tmp/compose.log || true
@@ -52,8 +62,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-artifacts
+          if-no-files-found: error
           path: |
-            /tmp/k6_models.json
+            ${{ github.workspace }}/.ci-out/**
             /tmp/router.log
             /tmp/compose.log
             /tmp/healthz.json
