@@ -42,8 +42,8 @@ ruby
 ￼Copiar código
 
 ## Documentation
-- PRD: [docs/PRD_TASK_MASTER.md](docs/PRD_TASK_MASTER.md)  
-- Agents & Routing Policy: [docs/AGENTS.md](docs/AGENTS.md)  
+- PRD: [docs/PRD_TASK_MASTER.md](PRD_TASK_MASTER.md)  
+- Agents & Routing Policy: [docs/AGENTS.md](AGENTS.md)  
 - Governance: [docs/GOVERNANCE.md](docs/GOVERNANCE.md)  
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)  
 - Frontend Integration Guide: [docs/FRONTEND_INTEGRATION.md](docs/FRONTEND_INTEGRATION.md)  

@@ -1,0 +1,5 @@
+# idempotency_key: labels-2025-10-21-v1
+labels:
+- name: area/router
+- name: type/ci
+- name: priority/normal

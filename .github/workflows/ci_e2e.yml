@@ -1,0 +1,85 @@
+# idempotency_key: gh-actions-ci-e2e-2025-10-22-v1
+name: CI E2E Cloud
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: ci-e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write env_file from Actions Secrets
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /srv-2/secrets/ai-stack
+          umask 077
+          {
+            [ -n "${{ secrets.OPENAI_API_KEY }}" ]      && echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+            [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]   && echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"
+            [ -n "${{ secrets.GROQ_API_KEY }}" ]        && echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}"
+            [ -n "${{ secrets.MISTRAL_API_KEY }}" ]     && echo "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}"
+            [ -n "${{ secrets.OPENROUTER_API_KEY }}" ]  && echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}"
+            [ -n "${{ secrets.PERPLEXITY_API_KEY }}" ]  && echo "PERPLEXITY_API_KEY=${{ secrets.PERPLEXITY_API_KEY }}"
+            [ -n "${{ secrets.XAI_API_KEY }}" ]         && echo "XAI_API_KEY=${{ secrets.XAI_API_KEY }}"
+            [ -n "${{ secrets.OLLAMA_API_KEY }}" ]      && echo "OLLAMA_API_KEY=${{ secrets.OLLAMA_API_KEY }}"
+            [ -n "${{ secrets.GOOGLE_API_KEY }}" ]      && echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}"
+            [ -n "${{ secrets.AZURE_OPENAI_API_KEY }}" ]&& echo "AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }}"
+          } | sudo tee /srv-2/secrets/ai-stack/ai-stack.env >/dev/null
+          sudo chmod 600 /srv-2/secrets/ai-stack/ai-stack.env
+
+      - name: Docker Compose up
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.yml up -d --build ai-router
+          for i in {1..60}; do curl -fsS http://localhost:8082/healthz && break || sleep 1; done
+
+      - name: Verify endpoints and save JSON
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee "$RUNNER_TEMP/healthz.json"
+          curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee "$RUNNER_TEMP/models.json"
+
+      - name: k6 via container (summary-export)
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e BASE_URL=http://localhost:8082 \
+            -v "${{ github.workspace }}/tests:/scripts:ro" \
+            -v "${{ runner.temp }}:/out" \
+            grafana/k6 run --summary-export /out/k6_models.json /scripts/k6_models.js | tee "$RUNNER_TEMP/k6_stdout.log"
+
+      - name: Upload artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/k6_models.json
+            ${{ runner.temp }}/k6_stdout.log
+            ${{ runner.temp }}/healthz.json
+            ${{ runner.temp }}/models.json
+
+      - name: Gate p95 < 1200ms
+        run: |
+          set -euo pipefail
+          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"]' "$RUNNER_TEMP/k6_models.json" 2>/dev/null || true)"
+          if [ -z "${P95:-}" ] || [ "$P95" = "null" ]; then
+            L=$(grep -E '^\s*\{ *ep:models *\}.*p\(95\)=' "$RUNNER_TEMP/k6_stdout.log" | tail -1 || true)
+            V=$(printf '%s\n' "$L" | sed -E 's/.*p\(95\)=([0-9.]+)(µs|ms).*/\1 \2/' || true)
+            VAL=$(printf '%s' "$V" | awk '{print $1}')
+            UNIT=$(printf '%s' "$V" | awk '{print $2}')
+            if [ "${UNIT:-}" = "µs" ]; then P95=$(awk -v x="${VAL:-0}" 'BEGIN{printf "%.3f", x/1000}'); else P95="${VAL:-}"; fi
+          fi
+          echo "p95_ms=${P95:-NA}"
+          [ -n "${P95:-}" ] && awk -v v="$P95" 'BEGIN{if (v+0<1200) exit 0; exit 1}'
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v || true

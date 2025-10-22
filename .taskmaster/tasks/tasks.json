@@ -1,0 +1,99 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Verificar triggers do workflow",
+        "description": "Auditar .github/workflows/ci_smoke.yml para garantir triggers: workflow_dispatch, push em main, pull_request.",
+        "details": "Acceptance: YAML contém workflow_dispatch: {}, push: branches [ main ], pull_request: {}. Validar com grep/rg e links para linhas exatas.",
+        "testStrategy": "",
+        "status": "in-progress",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Artefatos sempre",
+        "description": "Garantir que artifacts são sempre enviados na pipeline CI Smoke.",
+        "details": "Acceptance: step com actions/upload-artifact@v4 usa if: always(), if-no-files-found: warn e retention-days configurado.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Gate p95 robusto",
+        "description": "Gate de performance baseado em p95 extraído do k6.",
+        "details": "Acceptance: extrai p95 de JSON (--summary-export) e, se ausente, do stdout; falha quando p95>=1200 ms; executa somente após upload de artifacts.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Badge README",
+        "description": "Adicionar badge de status da pipeline CI Smoke no README.",
+        "details": "Acceptance: badge do GitHub Actions aponta para workflow .github/workflows/ci_smoke.yml (workflow name: CI Smoke) na branch main.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Proteção de branch",
+        "description": "Configurar proteção da branch main com status check e review.",
+        "details": "Acceptance: proteção exige status check obrigatório \"CI Smoke\" e no mínimo 1 code review antes de merge.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Expose /metrics (Prometheus)",
+        "description": "Expor endpoint /metrics para Prometheus com métricas básicas.",
+        "details": "Acceptance: counter de requisições, histograma http_req_duration com tag {ep}, métrica build_info; permitir scrape local.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "JSON logs estruturados",
+        "description": "Habilitar logs de acesso JSON pelo uvicorn.",
+        "details": "Acceptance: logs JSON estruturados contendo fields: ts, ep, code, dur_ms, route.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Gate p95 por label ep=models com fallback",
+        "description": "Fortalecer gate de performance para p95 específico do endpoint /v1/models.",
+        "details": "Acceptance: Ler p95 do objeto .metrics[\"http_req_duration{ep:models}\"].values[\"p(95)\"] no k6_models.json (gerado por --summary-export). Se ausente, fazer fallback parseando o stdout do k6 para a linha de ep=models e extrair p(95), normalizando unidade para ms. Falhar quando p95 >= 1200 ms. Garantir que o gate execute somente após o upload de artifacts (if: always()) para preservar evidências.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-10-22T02:18:41.230Z",
+      "description": "Default tasks context",
+      "updated": "2025-10-22T13:59:06.019Z"
+    }
+  }
+}
