@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"] // 1e9' "${GITHUB_WORKSPACE}/.ci-out/k6_models.json")"
+          P95="$(jq -r '.metrics["http_req_duration{ep:models}"].values["p(95)"] // 1e9' "${GITHUB_WORKSPACE}/.ci-out/k6_models.json")"
           awk 'BEGIN{exit !( '"${P95}"' < 1200 ) }'
 
       - name: Teardown
