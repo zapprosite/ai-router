@@ -1,0 +1,9 @@
+entity: diag/local/v2
+summary:
+  - app.py:12 @app.get("/healthz")
+  - app.py:16 @app.get("/v1/models")
+  - docker-compose.yml:11 "8082:8082"
+  - docs read: README.md (5251 bytes), PRD_TASK_MASTER.md (1730 bytes), AGENTS.md (9349 bytes)
+notes:
+  - MCP memory.add_observations unavailable; persisted to runs/diag-local-v2.txt instead.
+  - Used ripgrep for code confirmations; shell fallback for file reads due to MCP filesystem path restrictions.

@@ -81,20 +81,14 @@ jobs:
             ${{ runner.temp }}/router.log
             ${{ runner.temp }}/compose_ps.txt
 
-      - name: Gate p95 < 1200ms (with fallback)
+      - name: Gate p95<1200 & err<1% (with fallback)
         shell: bash
         run: |
-          set -euo pipefail
-          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"]' "$RUNNER_TEMP/k6_models.json" 2>/dev/null || true)"
-          if [ -z "${P95:-}" ] || [ "$P95" = "null" ]; then
-            L=$(grep -E '^\s*\{ *ep:models *\}.*p\(95\)=' "$RUNNER_TEMP/k6_stdout.log" | tail -1 || true)
-            V=$(printf '%s\n' "$L" | sed -E 's/.*p\(95\)=([0-9.]+)(µs|ms).*/\1 \2/' || true)
-            VAL=$(printf '%s' "$V" | awk '{print $1}')
-            UNIT=$(printf '%s' "$V" | awk '{print $2}')
-            if [ "${UNIT:-}" = "µs" ]; then P95=$(awk -v x="${VAL:-0}" 'BEGIN{printf "%.3f", x/1000}'); else P95="${VAL:-}"; fi
-          fi
-          echo "p95_ms=${P95:-NA}"
-          [ -n "${P95:-}" ] && awk -v v="$P95" 'BEGIN{if (v+0<1200) exit 0; exit 1}'
+          P95=$(jq -r '.metrics.http_req_duration.values["p(95)"] // .metrics.http_req_duration["p(95)"] // empty' "$RUNNER_TEMP/k6_models.json");
+          ERR=$(jq -r '.metrics.http_req_failed.values.rate // .metrics.http_req_failed.rate // 0' "$RUNNER_TEMP/k6_models.json");
+          [ -z "$P95" ] && P95=$(grep -E '\{ *ep:models *\}.*p\(95\)=' "$RUNNER_TEMP/k6_stdout.log" | sed -E 's/.*p\(95\)=([0-9.]+)(µs|ms).*/\1 \2/' | tail -1 | awk '{print ($2=="µs")?$1/1000:$1}');
+          echo "p95_ms=$P95 err_rate=$ERR";
+          awk -v p="$P95" -v e="$ERR" 'BEGIN{ if(p=="" || p+0>=1200 || e+0>=0.01) exit 1 }'
 
       - name: Teardown
         if: always()

@@ -1,7 +1,8 @@
-# AGENTS.md — Playbook Codex CLI + MCP para CI (GitHub Actions)
+<!-- idempotency_key: agents-md-2025-10-22-v2 -->
+# AGENTS.md — Playbook Codex CLI + MCP (Local & CI)
 
-> Objetivo: tornar o Codex CLI cirúrgico na abertura, execução e depuração do workflow **CI Smoke**.  
-> Escopo: GitHub Actions, `gh` CLI, MCP servers (`filesystem`, `ripgrep`, `github`, `task_master_ai`), k6.
+> Objetivo: tornar o Codex CLI cirúrgico na execução e depuração do **Smoke local** e do **CI Smoke**.  
+> Escopo: MCP (`filesystem`, `ripgrep`, `task_master_ai`), k6, Docker Compose. Em CI, GitHub Actions (sem nunca imprimir segredos).
 
 ---
 
@@ -21,6 +22,44 @@
 - Sem PII em logs. **Nunca** imprimir chaves.
 - `timeout=10s`, `retries=3` exponenciais para chamadas de ferramenta.
 - Subir artefatos **sempre** (`if: always()`) antes de qualquer “gate”.
+
+## Debug Local com MCP + Codex
+
+<!-- idempotency_key: agents-local-debug-2025-10-22-v1 -->
+
+- Pré‑checks rápidos (somente local; sem internet):
+  - `rg -n "@app.get\("/healthz"\)|@app.get\("/v1/models"\)" app.py` — confirmar rotas
+  - `rg -n '8082:8082' docker-compose.yml` — confirmar porta
+  - ACL do env_file (não imprimir valores):
+    - `getfacl -p /srv-2/secrets/ai-stack/ai-stack.env || true`
+    - `sudo setfacl -m u:$(whoami):r /srv-2/secrets/ai-stack/ai-stack.env`
+  - Subir serviço e validar endpoints:
+    - `docker compose -f docker-compose.yml up -d --build ai-router`
+    - `curl -fsS http://localhost:8082/healthz | tee healthz.json`
+    - `curl -fsS http://localhost:8082/v1/models | tee models.json`
+- k6 (duas opções locais):
+  - Host network (rápido):
+    - `docker run --rm --network host -e BASE_URL=http://localhost:8082 -v "$PWD/tests:/scripts:ro" -v "$PWD:/out" grafana/k6:latest run --summary-export /out/k6_models.json /scripts/k6_models.js | tee k6_stdout.log`
+  - Compose network (hermético):
+    - `CID=$(docker compose -f docker-compose.yml ps -q ai-router); NET=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$CID");`
+    - `docker run --rm --network "$NET" -e BASE_URL=http://ai-router:8082 -v "$PWD/tests:/scripts:ro" -v "$PWD:/out" grafana/k6:latest run --summary-export /out/k6_models.json /scripts/k6_models.js | tee k6_stdout.log`
+- Regras:
+  - Uma mudança por commit local; preferir patches pequenos e verificáveis. (Regra: “um commit por mudança”.)
+  - Não tocar `app.py` nem `docker-compose.yml` nesta fase; focar em docs/scripts auxiliares.
+  - Não sobrescrever arquivos do app (p.ex., `app.py`).
+  - Nunca expor segredos; não mover/copiar o `env_file`.
+
+## Playbook de coleta (local)
+
+- Logs e artefatos mínimos:
+  - `compose.log`: `docker compose -f docker-compose.yml logs --no-color > compose.log`
+  - `router.log`: `CID=$(docker compose -f docker-compose.yml ps -q ai-router); [ -n "$CID" ] && docker logs "$CID" > router.log`
+  - `compose_ps.txt`: `docker compose -f docker-compose.yml ps > compose_ps.txt`
+  - `healthz.json`, `models.json`: via curls acima
+  - `k6_out/k6_models.json`, `k6_stdout.log`: via k6 acima
+- Métricas de gate:
+  - `jq -r '.metrics.http_req_duration.values["p(95)"]' k6_models.json` (fallback: regex `p(95)=...` no `k6_stdout.log`, normalizar µs→ms)
+  - `jq -r '(.metrics.http_req_failed.values.rate // .metrics.http_req_failed.rate // 0)' k6_models.json`
 
 ## CI Smoke networking
 
@@ -42,7 +81,7 @@
     grafana/k6 run --summary-export /out/k6_models.json /scripts/k6_models.js
   ```
 
-Checklist de debug:
+Checklist de debug (CI):
 - `curl` dentro da rede do compose: `docker run --rm --network "$NET" curlimages/curl:8.10.1 -fsS http://ai-router:8082/healthz`.
 - Logs: `docker compose logs` e `docker logs $(docker compose ps -q ai-router)`; sempre subir como artefatos.
 - p95 fallback: se `k6_models.json` ausente/vazio, extrair de `k6_stdout.log` via regex `p(95)=<val><unit>` (normalizar µs→ms).
@@ -51,7 +90,6 @@ Checklist de debug:
 
 - `filesystem` (leitura/escrita de arquivos)
 - `ripgrep` (busca estrutural)
-- `github` (PR, branch, disparos e leitura de runs)
 - `task_master_ai` (planejamento quando necessário)
 
 ---

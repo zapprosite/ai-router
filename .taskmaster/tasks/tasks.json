@@ -7,7 +7,7 @@
         "description": "Auditar .github/workflows/ci_smoke.yml para garantir triggers: workflow_dispatch, push em main, pull_request.",
         "details": "Acceptance: YAML contém workflow_dispatch: {}, push: branches [ main ], pull_request: {}. Validar com grep/rg e links para linhas exatas.",
         "testStrategy": "",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": []
@@ -88,12 +88,114 @@
         "dependencies": [],
         "priority": "high",
         "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Docs: reorganize PRD and AGENTS to project root; add local debug playbook",
+        "description": "Move PRD_TASK_MASTER.md and AGENTS.md to project root and update content: add sections 'Debug Local com MCP + Codex' and 'Playbook de coleta'. Acceptance: README links are ./PRD_TASK_MASTER.md and ./AGENTS.md.",
+        "details": "- Move files to root\n- Update AGENTS.md with local debug instructions and collection playbook\n- Update README links\n- No app code changes; no secrets",
+        "testStrategy": "Manual verification via ripgrep for link targets in README; sanity check sections present.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Operar smoke local com sucesso (A1+A2)",
+        "description": "Executar o fluxo local de smoke: A1 (backend UP e endpoints 200) + A2 (k6 models com p95<1200ms e http_req_failed<1%). Coletar artefatos conforme PRD.",
+        "details": "- A1: docker compose up ai-router; curl /healthz e /v1/models; salvar em healthz.json e models.json\n- A2: grafana/k6 run tests/k6_models.js com BASE_URL; exportar / salvar k6_models.json e k6_stdout.log; extrair p95 e err\n- Sem alterar app ou compose; não imprimir segredos; env_file permanece em /srv-2/secrets/ai-stack/ai-stack.env",
+        "testStrategy": "Manual: validar status 200 e presença de chaves no JSON; jq p(95)<1200 e http_req_failed<0.01 em k6_models.json; fallback regex no k6_stdout.log",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "A1: Compose UP + verify endpoints",
+            "description": "Bring up ai-router and verify endpoints locally",
+            "details": "- docker compose -f docker-compose.yml up -d --build ai-router\n- curl -fsS http://localhost:8082/healthz | tee healthz.json\n- curl -fsS http://localhost:8082/v1/models | tee models.json\n- Do not print secrets; ensure ACL on /srv-2/secrets/ai-stack/ai-stack.env",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 10
+          },
+          {
+            "id": 2,
+            "title": "A2: k6 models (container) + artifacts",
+            "description": "Run grafana/k6 against /v1/models and collect artifacts",
+            "details": "- Host network: docker run --rm --network host -e BASE_URL=http://localhost:8082 -v \"$PWD/tests:/scripts:ro\" -v \"$PWD:/out\" grafana/k6:latest run --summary-export /out/k6_models.json /scripts/k6_models.js | tee k6_stdout.log\n- Compose network (optional): detect NET via docker inspect and run with --network \"$NET\" and BASE_URL=http://ai-router:8082\n- Save k6_models.json and k6_stdout.log",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 10
+          },
+          {
+            "id": 3,
+            "title": "Gate: evaluate p95 and error thresholds",
+            "description": "Evaluate metrics and mark pass/fail per PRD",
+            "details": "- Extract p95: jq -r '.metrics.http_req_duration.values[\"p(95)\"]' k6_models.json (fallback regex from k6_stdout.log, normalize µs→ms)\n- Extract error rate: jq -r '(.metrics.http_req_failed.values.rate // .metrics.http_req_failed.rate // 0)' k6_models.json\n- Accept if p95<1200 and error<0.01; otherwise collect compose.log, router.log, compose_ps.txt for diagnosis",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 10
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "A1 Operar /healthz e /v1/models local",
+        "description": "Operar manualmente o smoke local: garantir ACL de leitura do env_file, subir o serviço com docker compose e validar 200 em /healthz e /v1/models com corpo contendo campo data. Não tocar app.py/docker-compose.yml.",
+        "details": "Acceptance:\n- GET /healthz -> 200, corpo {\"ok\": true} salvo em healthz.json\n- GET /v1/models -> 200, corpo com data[] salvo em models.json\n- Artefatos: compose.log, router.log, compose_ps.txt, healthz.json, models.json\n- Sem impressão de segredos; ACL via setfacl; executar docker compose a partir da raiz do repo",
+        "testStrategy": "Manual verification with curls and saved artifacts (healthz.json, models.json)",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Garantir ACL de /srv-2/secrets/ai-stack/ai-stack.env",
+            "description": "Instalar ACL se necessário e conceder leitura apenas ao usuário atual. Não imprimir segredos.",
+            "details": "Comandos base:\n- sudo apt-get update && sudo apt-get install -y acl\n- sudo setfacl -m u:$(whoami):r /srv-2/secrets/ai-stack/ai-stack.env\n- getfacl -p /srv-2/secrets/ai-stack/ai-stack.env || true\nResultados esperados: ACL aplicada; nenhum valor de secret impresso.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          },
+          {
+            "id": 2,
+            "title": "docker compose up ai-router e aguardar /healthz",
+            "description": "Subir o serviço pelo docker compose a partir da raiz do repo e aguardar /healthz 200.",
+            "details": "Comandos base:\n- cd /srv/projects/ai-router\n- docker compose -f docker-compose.yml up -d --build ai-router\n- curl -fsS http://localhost:8082/healthz | tee healthz.json\nResultados esperados: container rodando, healthz.json com {\"ok\": true}.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 11
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "A2 Executar k6 e checar p95 e erro",
+        "description": "Executar k6 (tests/k6_models.js) contra o backend local e checar p95<1200ms e http_req_failed<1% para /v1/models.",
+        "details": "Aceite:\n- k6 --summary-export k6_out/k6_models.json\n- p95(ms) < 1200 em http_req_duration{ep:models}\n- http_req_failed < 0.01\n- Artefatos: k6_out/k6_models.json, k6_stdout.log",
+        "testStrategy": "Run k6 in container; export summary JSON; compute p95 and error rate; fallback regex from k6_stdout.log",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "A3 Documentar Local Smoke no README",
+        "description": "Atualizar README.md com playbook Local Smoke e coleta de artefatos (compose.log, router.log, compose_ps.txt, healthz.json, models.json, k6_out/k6_models.json, k6_stdout.log).",
+        "details": "Incluir: instalação de ACL, executar docker compose da raiz do repo, curls de verificação, k6 (host/compose network), coleta de artefatos.",
+        "testStrategy": "Manual review of README section; ensure idempotency_key present; verify commands align with AGENTS.md",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-10-22T02:18:41.230Z",
       "description": "Default tasks context",
-      "updated": "2025-10-22T13:59:06.019Z"
+      "updated": "2025-10-23T01:20:11.293Z"
     }
   }
 }

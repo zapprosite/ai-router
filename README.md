@@ -42,8 +42,8 @@ ruby
 ￼Copiar código
 
 ## Documentation
-- PRD: [docs/PRD_TASK_MASTER.md](PRD_TASK_MASTER.md)  
-- Agents & Routing Policy: [docs/AGENTS.md](AGENTS.md)  
+- PRD: [./PRD_TASK_MASTER.md](PRD_TASK_MASTER.md)  
+- Agents & Routing Policy: [./AGENTS.md](AGENTS.md)  
 - Governance: [docs/GOVERNANCE.md](docs/GOVERNANCE.md)  
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)  
 - Frontend Integration Guide: [docs/FRONTEND_INTEGRATION.md](docs/FRONTEND_INTEGRATION.md)  
@@ -98,3 +98,65 @@ MIT © 2025 William Rodrigues / AI-Stack
 [![CI](https://github.com/zapprosite/ai-router/actions/workflows/ci.yml/badge.svg)](https://github.com/zapprosite/ai-router/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/zapprosite/ai-router)](https://github.com/zapprosite/ai-router/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+## Local Smoke
+
+<!-- idempotency_key: readme-local-smoke-2025-10-22-v1 -->
+
+Run a minimal local smoke (no CI, no internet):
+
+1) Pre-req: Install ACL and grant read-only to the current user (never print secrets)
+
+```bash
+# Install ACL tools (Debian/Ubuntu). On RHEL/CentOS use: sudo yum install -y acl
+sudo apt-get update && sudo apt-get install -y acl
+
+# Grant read-only to current user for the env file (no contents shown)
+sudo setfacl -m u:$(whoami):r /srv-2/secrets/ai-stack/ai-stack.env
+
+# Optional: verify ACLs (safe; does not print secrets)
+getfacl -p /srv-2/secrets/ai-stack/ai-stack.env || true
+```
+
+2) From repo root, bring up and verify endpoints
+
+```bash
+cd /srv/projects/ai-router  # repo root
+docker compose -f docker-compose.yml up -d --build ai-router
+curl -fsS http://localhost:8082/healthz | tee healthz.json
+curl -fsS http://localhost:8082/v1/models | tee models.json
+```
+
+3) Run k6 models (choose one)
+
+- Host network (simple):
+
+```bash
+docker run --rm --network host \
+  -e BASE_URL=http://localhost:8082 \
+  -v "$PWD/tests:/scripts:ro" \
+  -v "$PWD:/out" \
+  grafana/k6:latest run --summary-export /out/k6_models.json /scripts/k6_models.js | tee k6_stdout.log
+```
+
+- Compose network (hermetic):
+
+```bash
+CID=$(docker compose -f docker-compose.yml ps -q ai-router)
+NET=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$CID")
+docker run --rm --network "$NET" \
+  -e BASE_URL=http://ai-router:8082 \
+  -v "$PWD/tests:/scripts:ro" \
+  -v "$PWD:/out" \
+  grafana/k6:latest run --summary-export /out/k6_models.json /scripts/k6_models.js | tee k6_stdout.log
+```
+
+Extract p95 and error rate:
+
+```bash
+P95=$(jq -r '.metrics.http_req_duration.values["p(95)"]' k6_models.json 2>/dev/null || true)
+ERR=$(jq -r '(.metrics.http_req_failed.values.rate // .metrics.http_req_failed.rate // 0)' k6_models.json 2>/dev/null || echo 0)
+echo "p95_ms=${P95:-NA} err_rate=${ERR:-NA}"
+```
+
+Note: A scripted flow may be available in `scripts/ci-smoke-run.sh` and is documented in PRD A3; it is not required to exist for this local smoke.

@@ -1,0 +1,6 @@
+entity: prd/v2/status
+summary:
+  - PRD_TASK_MASTER.md v2: 50 fases (A1–A50), A1–A3 priorizadas
+  - AGENTS.md: Debug Local mantido; coleta: compose.log, router.log, compose_ps.txt, healthz.json, models.json, k6_out/k6_models.json, k6_stdout.log
+  - Regras: “um commit por mudança”; não tocar app.py/docker-compose.yml nesta fase
+  - README.md: Local Smoke com instalação de ACL e exec. do compose a partir da raiz do repo

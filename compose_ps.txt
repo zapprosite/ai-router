@@ -1,2 +1,2 @@
 NAME                    IMAGE             COMMAND                  SERVICE     CREATED          STATUS          PORTS
-ai-router-ai-router-1   ai-router:local   "uvicorn app:app --h…"   ai-router   33 seconds ago   Up 33 seconds   0.0.0.0:8082->8082/tcp, [::]:8082->8082/tcp
+ai-router-ai-router-1   ai-router:local   "uvicorn app:app --h…"   ai-router   20 minutes ago   Up 20 minutes   0.0.0.0:8082->8082/tcp, [::]:8082->8082/tcp
