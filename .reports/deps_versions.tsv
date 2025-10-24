@@ -1,0 +1,10 @@
+# idempotency_key: deps-versions-2025-10-24-v1
+fastapi	0.115.0	0.120.0
+httpx	0.27.2	unknown
+jinja2	3.1.4	unknown
+langchain-core	0.3.79	unknown
+langgraph	0.6.7	unknown
+langgraph-checkpoint	2.1.2	unknown
+pydantic	2.8.2	2.12.3
+tiktoken	0.7.0	unknown
+uvicorn	0.30.6	0.38.0

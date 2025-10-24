@@ -1,0 +1,9 @@
+fastapi
+httpx
+jinja2
+langchain-core
+langgraph
+langgraph-checkpoint
+pydantic
+tiktoken
+uvicorn

@@ -1,0 +1,6 @@
+# idempotency_key: deps-audit-session-2025-10-24-v1
+deps_pip_audit.txt: deps-pip-audit-txt-2025-10-24-v1
+deps_pip_audit.txt: deps-pip-audit-txt-2025-10-24-v1
+deps_versions.tsv: deps-versions-2025-10-24-v1
+requirements.lock: deps-lock-2025-10-24-v1
+deps_pip_audit.json: raw (no idkey header; tool JSON)

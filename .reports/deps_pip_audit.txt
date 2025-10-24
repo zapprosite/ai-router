@@ -1,0 +1,8 @@
+# idempotency_key: deps-pip-audit-txt-2025-10-24-v1
+Name      Version ID                  Fix Versions
+--------- ------- ------------------- ------------
+jinja2    3.1.4   GHSA-q2x7-8rv6-6q7h 3.1.5
+jinja2    3.1.4   GHSA-gmj6-6f8f-6699 3.1.5
+jinja2    3.1.4   GHSA-cpwx-vrp4-4pq7 3.1.6
+starlette 0.38.6  GHSA-f96h-pmfr-66vw 0.40.0
+starlette 0.38.6  GHSA-2c2j-9gv5-cj73 0.47.2
