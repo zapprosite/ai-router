@@ -5,6 +5,8 @@ __pycache__/
 *.pyd
 *.egg-info/
 .venv/
+.venv-*
+k6_out/
 venv/
 dist/
 build/
