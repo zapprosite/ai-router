@@ -14,6 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Diagnostics
+        shell: bash
+        run: |
+          docker --version
+          docker compose version
+          jq --version
+          python3 --version
+
       - name: Stub AI stack env
         shell: bash
         run: |
@@ -88,6 +96,20 @@ jobs:
             ${{ runner.temp }}/compose.log
             ${{ runner.temp }}/router.log
             ${{ runner.temp }}/compose_ps.txt
+
+      - name: Create sentinel
+        if: always()
+        shell: bash
+        run: echo smoke > "$RUNNER_TEMP/sentinel.txt"
+
+      - name: Upload sentinel
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: ${{ runner.temp }}/sentinel.txt
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Gate p95<1200 & err<1% (with fallback)
         shell: bash
