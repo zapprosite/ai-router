@@ -2,7 +2,7 @@
 name: CI Smoke
 on:
   workflow_dispatch: {}
-  push: { branches: [ main ] }
+  push: { branches: [ main, ci/smoke-net ] }
   pull_request: {}
 
 permissions: { contents: read }
@@ -14,14 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prep env path for compose
+      - name: Stub AI stack env
         shell: bash
         run: |
-          set -euxo pipefail
-          sudo mkdir -p /srv-2/secrets/ai-stack
-          sudo tee /srv-2/secrets/ai-stack/ai-stack.env >/dev/null <<'E'
-          # minimal CI env; keep empty unless needed by app
-          E
+          set -euo pipefail
+          AI_STACK_ENV="$RUNNER_TEMP/ai-stack.env"
+          cat >"$AI_STACK_ENV" <<'EOF'
+          OPENAI_API_KEY=dummy
+          AZURE_OPENAI_API_KEY=dummy
+          GROQ_API_KEY=dummy
+          MISTRAL_API_KEY=dummy
+          XAI_API_KEY=dummy
+          PERPLEXITY_API_KEY=dummy
+          OPENROUTER_API_KEY=dummy
+          GOOGLE_API_KEY=dummy
+          EOF
+          echo "AI_STACK_ENV=$AI_STACK_ENV" >> "$GITHUB_ENV"
 
       - name: Compose up
         shell: bash
