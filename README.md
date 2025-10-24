@@ -95,6 +95,7 @@ License
 MIT © 2025 William Rodrigues / AI-Stack
 
 ## Status
+[![CI Smoke](https://github.com/zapprosite/ai-router/actions/workflows/ci_smoke.yml/badge.svg)](https://github.com/zapprosite/ai-router/actions/workflows/ci_smoke.yml)
 [![CI](https://github.com/zapprosite/ai-router/actions/workflows/ci.yml/badge.svg)](https://github.com/zapprosite/ai-router/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/zapprosite/ai-router)](https://github.com/zapprosite/ai-router/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
