@@ -46,12 +46,12 @@ jobs:
           NET=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$CID")
           echo "NET=$NET" >> "$GITHUB_ENV"
 
-      - name: Verify endpoints
+      - name: Verify endpoints (compose network)
         shell: bash
         run: |
-          set -euxo pipefail
-          curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
-          curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
+          set -euo pipefail
+          docker run --rm --network "$NET" curlimages/curl:8.10.1 -fsS http://ai-router:8082/healthz | python3 -m json.tool | tee "$RUNNER_TEMP/healthz.json"
+          docker run --rm --network "$NET" curlimages/curl:8.10.1 -fsS http://ai-router:8082/v1/models | python3 -m json.tool | tee "$RUNNER_TEMP/models.json"
 
       - name: k6 via container (compose network)
         shell: bash
