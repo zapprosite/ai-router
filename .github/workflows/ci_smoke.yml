@@ -2,11 +2,15 @@
 name: CI Smoke
 on:
   workflow_dispatch: {}
-  push: { branches: [ main, ci/smoke-net ] }
+  push:
+    branches: [ main, ci/smoke-net ]
   pull_request: {}
 
-permissions: { contents: read }
-concurrency: { group: ci-smoke-${{ github.ref }}, cancel-in-progress: true }
+permissions:
+  contents: read
+concurrency:
+  group: ci-smoke-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
