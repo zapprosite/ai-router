@@ -249,3 +249,7 @@ docs-verify:
 		fi; \
 	done; \
 	[ $$fail -eq 0 ] && echo "OK: todos os 'make <alvo>' documentados existem no Makefile."
+
+.PHONY: test-continue
+test-continue:
+	@pytest -q tests/test_chat_completions.py
