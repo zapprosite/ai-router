@@ -78,6 +78,12 @@ No Continue (VS Code):
 - Selecione `router-auto` para chat, edit, apply e autocomplete.
 - MCP: em agent mode, a ferramenta `ai_router.route` ficará disponível a partir do servidor `ai_router_mcp`. Peça ao agente para “usar a ferramenta ai_router.route” passando `messages`, `budget` (opcional) e `prefer_code` (opcional). A ferramenta chama `POST /route` e retorna `{content, usage}`.
 
+Screenshot (selecionando `router-auto` nos 4 papéis):
+
+![Continue VS Code — router-auto em chat/edit/apply/autocomplete](docs/images/continue-router-auto.png)
+
+Coloque a captura de tela no caminho `docs/images/continue-router-auto.png`.
+
 ### Exemplo: Chat Completions (OpenAI)
 
 O shim adiciona `POST /v1/chat/completions` e mapeia para o roteador. Use `model: "router-auto"`:
