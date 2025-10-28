@@ -87,16 +87,20 @@ def debug_where():
 @app.get("/v1/models")
 def list_models_openai():
     from graph.router import CONFIG_PATH
-    cfg = yaml.safe_load(open(CONFIG_PATH,"r"))
-    data=[]
+    data = []
     import time
-    for m in cfg.get("models",[]):
-        data.append({
-            "id": m.get("id") or m.get("name"),
-            "object":"model",
-            "owned_by": m.get("provider","unknown"),
-            "created": int(time.time())
-        })
+    try:
+        cfg = yaml.safe_load(open(CONFIG_PATH, "r"))
+        for m in (cfg.get("models", []) if isinstance(cfg, dict) else []):
+            data.append({
+                "id": m.get("id") or m.get("name"),
+                "object": "model",
+                "owned_by": m.get("provider", "unknown"),
+                "created": int(time.time()),
+            })
+    except Exception:
+        # tolerate missing/invalid config on cold start; still expose router-auto
+        pass
     # Ensure logical router model is present for OpenAI-compat clients
     if not any((d.get("id") == "router-auto") for d in data):
         data.append({
@@ -105,7 +109,7 @@ def list_models_openai():
             "owned_by": "router",
             "created": int(time.time()),
         })
-    return {"object":"list","data":data}
+    return {"object": "list", "data": data}
 
 # --- Ações: smoke e teste de modelo ---
 from pydantic import BaseModel

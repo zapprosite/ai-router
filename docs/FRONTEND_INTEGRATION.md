@@ -41,3 +41,66 @@ Resolução dinâmica (`model_id`)
 
 Cabeçalhos relevantes
 - `Content-Type: application/json`.
+
+## Continue.dev (VS Code) — router-auto + MCP
+
+Uso com Continue (28/10/2025) sem referenciar modelos físicos. Configure um único modelo lógico `router-auto` apontando para o nosso shim OpenAI e habilite o MCP do roteador:
+
+Workspace `.continue/config.yaml` (já incluído no repositório):
+```yaml
+%YAML 1.1
+---
+name: ai-router
+version: 0.0.1
+schema: v1
+
+models:
+  - name: router-auto
+    provider: openai
+    model: router-auto
+    apiBase: http://localhost:8082/v1
+    apiKey: ROUTER
+    roles: [chat, autocomplete, edit, apply]
+
+agent:
+  chatModel: router-auto
+  editModel: router-auto
+  applyModel: router-auto
+  autocompleteModel: router-auto
+
+mcpServers:
+  - name: ai_router_mcp
+    command: python
+    args: ["tools/ai_router_mcp.py"]
+```
+
+No Continue (VS Code):
+- Selecione `router-auto` para chat, edit, apply e autocomplete.
+- MCP: em agent mode, a ferramenta `ai_router.route` ficará disponível a partir do servidor `ai_router_mcp`. Peça ao agente para “usar a ferramenta ai_router.route” passando `messages`, `budget` (opcional) e `prefer_code` (opcional). A ferramenta chama `POST /route` e retorna `{content, usage}`.
+
+### Exemplo: Chat Completions (OpenAI)
+
+O shim adiciona `POST /v1/chat/completions` e mapeia para o roteador. Use `model: "router-auto"`:
+
+```bash
+curl -fsS http://localhost:8082/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "model": "router-auto",
+        "messages": [{"role":"user","content":"Explique HVAC em 1 frase."}]
+      }' | jq '.'
+```
+
+Resposta (formato OpenAI), onde `model` reflete o modelo real resolvido pelo roteador:
+```json
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "created": 173014...,
+  "model": "llama-3.1-8b-instruct",
+  "choices": [
+    {"index":0,"message":{"role":"assistant","content":"..."},"finish_reason":"stop"}
+  ],
+  "usage": {"resolved_model_id":"llama-3.1-8b-instruct", "...": "..."}
+}
+```
