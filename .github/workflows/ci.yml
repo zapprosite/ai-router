@@ -1,0 +1,83 @@
+# idempotency_key: gh-actions-ci-2025-10-21-v11
+name: CI
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+  pull_request: {}
+
+permissions: { contents: read }
+concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prep env path for compose
+        run: |
+          set -euxo pipefail
+          sudo mkdir -p /srv-2/secrets/ai-stack
+          sudo tee /srv-2/secrets/ai-stack/ai-stack.env >/dev/null <<'E'
+          # minimal CI env; keep empty unless needed by app
+          E
+
+      - name: Compose up
+        run: |
+          set -euxo pipefail
+          docker compose -f docker-compose.yml up -d --build ai-router
+          for i in {1..60}; do curl -fsS http://localhost:8082/healthz && break || sleep 1; done
+
+      - name: Verify endpoints
+        run: |
+          set -euxo pipefail
+          curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
+          curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
+
+      - name: Setup k6
+        uses: grafana/setup-k6@v1
+        with: { version: v0.50.0 }
+
+      - name: k6 smoke (never fail; capture summary)
+        env:
+          BASE_URL: http://localhost:8082
+          K6_SUMMARY_TREND_STATS: avg,min,med,max,p(90),p(95),p(99)
+        run: |
+          set +e
+          OUT="${GITHUB_WORKSPACE}/.ci-out"; mkdir -p "$OUT"
+          k6 run --summary-export="${OUT}/k6_models.json" tests/k6_models.js | tee "${OUT}/k6_stdout.log"
+          echo $? > "${OUT}/k6_rc.txt"
+          set -e
+          test -s "${OUT}/k6_models.json" || echo '{}' > "${OUT}/k6_models.json"
+
+      - name: Collect logs
+        if: always()
+        run: |
+          set -euxo pipefail
+          CID="$(docker compose -f docker-compose.yml ps -q ai-router || true)"
+          if [ -n "$CID" ]; then docker logs "$CID" > /tmp/router.log || true; fi
+          docker compose -f docker-compose.yml logs ai-router > /tmp/compose.log || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: |
+            ${{ github.workspace }}/.ci-out/**
+            /tmp/router.log
+            /tmp/compose.log
+            /tmp/healthz.json
+            /tmp/models.json
+
+      - name: Gate thresholds (fail after upload)
+        run: |
+          set -euxo pipefail
+          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"] // 1e9' "${GITHUB_WORKSPACE}/.ci-out/k6_models.json")"
+          awk 'BEGIN{exit !( '"${P95}"' < 1200 ) }'
+        shell: bash
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v || true

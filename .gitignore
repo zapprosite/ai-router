@@ -1,0 +1,106 @@
+########################################
+# OS / Editor
+########################################
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+.cursor/
+.local/
+
+########################################
+# Python
+########################################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.tox/
+.ruff_cache/
+.ipynb_checkpoints/
+.pyright/
+
+########################################
+# Environments
+########################################
+.venv/
+.venv-*/
+.venv_verify/
+.venv-lock/
+.venv-audit/
+.python-version
+
+########################################
+# Caches
+########################################
+.cache/
+
+########################################
+# Tools / Agents
+########################################
+.codex/
+.continue/
+.taskmaster/
+.mcp-debug-tools/
+
+########################################
+# Build / Dist / Packaging
+########################################
+dist/
+build/
+*.egg-info/
+__pypackages__/
+
+########################################
+# Reports / Logs / Artifacts
+########################################
+.reports/
+test-results/
+k6_out/
+k6_stdout*.log
+compose.log
+router.log
+*.log
+*.tmp
+repo_tree.txt
+healthz.json
+models.json
+
+########################################
+# Docker / Compose backups
+########################################
+docker-compose.yml.bak.*
+
+########################################
+# CI local outputs
+########################################
+.ci-out/
+
+########################################
+# App-specific: configs/segredos locais
+########################################
+# manter .env.example versionado; ignorar variantes locais
+config/.env.*
+!config/.env.example
+
+########################################
+# Node (se usado em testes auxiliares)
+########################################
+tests/node_modules/
+tests/package-lock.json
+node_modules/
+
+# gitignore
+config/.env.local
+config/.env.local
+.venv/
+__pycache__/
+node_modules/
+.DS_Store
+*.pyc

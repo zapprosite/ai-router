@@ -1,0 +1,15 @@
+services:
+  ai-router:
+    build: .
+    image: ai-router:local
+    ports:
+      - "8082:8082"
+    environment:
+      - OLLAMA_BASE_URL=http://localhost:11434
+      - OPENAI_API_BASE=https://api.openai.com/v1
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped

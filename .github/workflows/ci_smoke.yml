@@ -1,0 +1,98 @@
+# idempotency_key: gh-actions-ci-smoke-2025-10-21-v3
+name: CI Smoke
+on:
+  workflow_dispatch: {}
+  push: { branches: [ main ] }
+  pull_request: {}
+
+permissions: { contents: read }
+concurrency: { group: ci-smoke-${{ github.ref }}, cancel-in-progress: true }
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prep env path for compose
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo mkdir -p /srv-2/secrets/ai-stack
+          sudo tee /srv-2/secrets/ai-stack/ai-stack.env >/dev/null <<'E'
+          # minimal CI env; keep empty unless needed by app
+          E
+
+      - name: Compose up
+        shell: bash
+        run: |
+          set -euxo pipefail
+          docker compose -f docker-compose.yml up -d --build ai-router
+          for i in {1..60}; do curl -fsS http://localhost:8082/healthz && break || sleep 1; done
+
+      - name: Verify endpoints
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fsS http://localhost:8082/healthz | python3 -m json.tool | tee /tmp/healthz.json
+          curl -fsS http://localhost:8082/v1/models | python3 -m json.tool | tee /tmp/models.json
+
+      - name: Install k6 (APT)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y ca-certificates gnupg
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -y
+          sudo apt-get install -y k6
+          k6 version
+
+      - name: k6 smoke (never fail; capture summary)
+        env:
+          BASE_URL: http://localhost:8082
+          K6_SUMMARY_TREND_STATS: avg,min,med,max,p(90),p(95),p(99)
+        shell: bash
+        run: |
+          set +e
+          OUT="${GITHUB_WORKSPACE}/.ci-out"; mkdir -p "$OUT"
+          k6 run --summary-export="${OUT}/k6_models.json" tests/k6_models.js | tee "${OUT}/k6_stdout.log"
+          echo $? > "${OUT}/k6_rc.txt"
+          set -e
+          test -s "${OUT}/k6_models.json" || echo '{}' > "${OUT}/k6_models.json"
+
+      - name: Collect logs
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          CID="$(docker compose -f docker-compose.yml ps -q ai-router || true)"
+          if [ -n "$CID" ]; then docker logs "$CID" > /tmp/router.log || true; fi
+          docker compose -f docker-compose.yml logs ai-router > /tmp/compose.log || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/.ci-out/**
+            /tmp/router.log
+            /tmp/compose.log
+            /tmp/healthz.json
+            /tmp/models.json
+
+      - name: Gate thresholds (fail after upload)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          P95="$(jq -r '.metrics.http_req_duration.values["p(95)"] // 1e9' "${GITHUB_WORKSPACE}/.ci-out/k6_models.json")"
+          awk 'BEGIN{exit !( '"${P95}"' < 1200 ) }'
+
+      - name: Teardown
+        if: always()
+        shell: bash
+        run: docker compose -f docker-compose.yml down -v || true

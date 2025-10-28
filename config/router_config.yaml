@@ -1,0 +1,42 @@
+# Registry de modelos + thresholds (preferir local; fallback cloud)
+models:
+  - id: llama-3.1-8b-instruct
+    provider: ollama
+    name: "llama3.1:8b-instruct-q5_K_M"
+    base_url: "http://localhost:11434"
+
+  - id: deepseek-coder-v2-16b
+    provider: ollama
+    name: "deepseek-coder-v2:16b"
+    base_url: "http://localhost:11434"
+
+  - id: gpt-5-nano
+    provider: openai
+    name: "gpt-5-nano"
+
+  - id: gpt-5-mini
+    provider: openai
+    name: "gpt-5-mini"
+
+  - id: gpt-5-codex
+    provider: openai
+    name: "gpt-5-codex"
+
+  - id: gpt-5-high
+    provider: openai
+    name: "gpt-5"
+
+thresholds:
+  long_tokens: 12000
+  code_simple_max_tokens: 800
+  code_hint_regex: "(```|\\bdef\\b|\\bclass\\b|\\bimport\\b|\\bfunction\\b|SELECT\\s|INSERT\\s|traceback|Exception:|#include|public\\s+static\\s+void|\\{|\\}|;)"
+  code_complex_regex: "(Traceback|stack\\s*trace|refactor|multi(-|\\s*)file|tool-?use|regex\\b|benchmark|deadlock|race\\s*condition)"
+
+budget:
+  low: { prefer_cheap: true }
+  balanced: { prefer_cheap: true }
+  high: { prefer_cheap: false }
+
+sla:
+  enabled: true
+  latency_sec: 6

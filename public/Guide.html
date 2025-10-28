@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>PAINEL de CONTROLE — LANGCHAIN 1.0 · Router Automático</title>
+<style>
+  :root{--bg:#070b12;--glass:#0c1320cc;--cyan:#00e5ff;--amber:#ffb86b;--ink:#d6e9ff;--ok:#31e981;--err:#ff5c5c}
+  html,body{height:100%}
+  body{
+    margin:0;font:14px/1.5 Inter,system-ui;color:var(--ink);
+    background:radial-gradient(1200px 600px at 80% -10%,#0a1d2f,transparent 60%),
+               radial-gradient(1000px 500px at -10% 80%,#1b0e02,transparent 55%),var(--bg)
+  }
+  .hdr{display:flex;gap:12px;align-items:center;padding:22px;border-bottom:1px solid #1b2a44;background:linear-gradient(180deg,#0c1422aa,#0a111e66)}
+  .led{width:12px;height:12px;border-radius:50%;background:radial-gradient(9px 9px at 40% 35%,var(--amber),#ffcc8a 60%,#3b1f00 100%);box-shadow:0 0 10px var(--amber),0 0 28px #cf8a3a66}
+  h1{margin:0;font-size:22px}.pill{display:inline-block;margin-left:8px;padding:3px 8px;border:1px solid #143a58;border-radius:999px;background:#0b1b31;color:#89dfff;font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;padding:18px;max-width:1280px;margin:0 auto}
+  @media (min-width:1200px){ .grid{max-width:1400px} } /* 16:9 confortável */
+  .card{grid-column:span 4;background:#0f1828aa;border:1px solid #1b2a44;border-radius:14px;padding:14px}
+  .btns{display:flex;flex-wrap:wrap;gap:10px}
+  button{font-weight:600;color:#00212a;background:linear-gradient(180deg,#00e5ff,#00b8d6);border:0;border-radius:12px;padding:10px 12px;cursor:pointer;box-shadow:0 6px 20px #00e5ff33,inset 0 -2px 0 #007e8f}
+  button.alt{background:linear-gradient(180deg,#ffcc8a,#ffb86b);color:#3b2200;box-shadow:0 6px 20px #ffb86b33,inset 0 -2px 0 #b86a24}
+  .term{grid-column:span 8;min-height:260px;background:#050a12;border:1px solid #102038;border-radius:12px;padding:12px;font:12px "JetBrains Mono",monospace;overflow:auto}
+  .row{margin:6px 0}.ok{color:var(--ok)}.err{color:var(--err)}
+
+  /* Rodapé: Terminal/Comandos numerados */
+  .fab{position:fixed;right:22px;bottom:22px;z-index:9999;background:linear-gradient(180deg,#00e5ff,#00b8d6);color:#00171d;border:0;border-radius:999px;padding:12px 14px;font-weight:700;letter-spacing:.5px;box-shadow:0 10px 30px #00e5ff33,inset 0 -2px 0 #007e8f;cursor:pointer}
+  .drawer{position:fixed;left:0;right:0;bottom:-65vh;height:65vh;z-index:9998;background:#050a12f2;border-top:1px solid #102038;backdrop-filter:blur(6px) saturate(1.2);transition:bottom .18s ease;box-shadow:0 -20px 60px #000a}
+  .drawer.open{bottom:0}
+  .drawer .hdr2{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid #0f223b;background:#0b1524cc}
+  .drawer h3{margin:0;font-size:14px;color:#9fdcff;letter-spacing:.6px}
+  .cmds{padding:10px 14px;display:grid;grid-template-columns:1fr auto;gap:10px}
+  .cmd{font:12px "JetBrains Mono",monospace;color:#e1f7ff;background:#081425;border:1px solid #102038;border-radius:8px;padding:8px;white-space:pre-wrap}
+  .num{min-width:42px;text-align:center;background:#142a3f;color:#9fdcff;border:1px solid #1b3c5f;border-radius:10px;padding:8px 10px;cursor:pointer;font-weight:800}
+  .num:hover{filter:brightness(1.06)}
+  .toast{position:fixed;right:20px;bottom:90px;background:#0c1b2ecc;color:#dff6ff;padding:8px 12px;border-radius:8px;border:1px solid #1a3657;opacity:0;transition:opacity .15s}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+  <div class="hdr"><div class="led"></div><h1>PAINEL de CONTROLE — <span style="color:var(--cyan)">LANGCHAIN 1.0</span><span class="pill">Router Automático</span></h1></div>
+
+  <div class="grid">
+    <div class="card"><h3>Sessão & Ambiente</h3><div class="btns">
+      <button class="alt" onclick="get('/debug/where')">/debug/where</button>
+      <button onclick="get('/v1/models')">/v1/models</button>
+      <button onclick="hint()">Ativar venv (hint)</button>
+    </div></div>
+
+    <div class="card"><h3>Smokes</h3><div class="btns">
+      <button onclick="post('/actions/smoke')">Smoke (texto+código)</button>
+      <button onclick="post('/route',{messages:[{role:'user',content:'Explique HVAC em 1 frase.'}]})">Texto curto</button>
+      <button class="alt" onclick="post('/route',{messages:[{role:'user',content:'Escreva uma função Python soma(n1,n2) com docstring.'}],prefer_code:true})">Código (prefer_code)</button>
+    </div></div>
+
+    <div class="card"><h3>Matriz OpenAI</h3><div class="btns">
+      <button onclick="test('gpt-5-nano')">gpt-5-nano</button>
+      <button onclick="test('gpt-5-mini')">gpt-5-mini</button>
+      <button class="alt" onclick="test('gpt-5-codex')">gpt-5-codex</button>
+      <button onclick="test('gpt-5')">gpt-5 (high)</button>
+    </div><h3 style="margin-top:10px">Locais</h3><div class="btns">
+      <button onclick="test('llama3.1:8b-instruct-q5_K_M')">Llama 3.1 · 8B</button>
+      <button class="alt" onclick="test('deepseek-coder-v2:16b')">DeepSeek Coder v2 · 16B</button>
+    </div></div>
+
+    <div id="term" class="term"></div>
+  </div>
+
+  <!-- Rodapé: comandos numerados. Comentário visível; botão copia SÓ o comando -->
+  <button class="fab" onclick="toggleDrawer()" title="Comandos rápidos">Terminal</button>
+  <div id="drawer" class="drawer" aria-hidden="true">
+    <div class="hdr2">
+      <h3>Comandos úteis — clique no número para copiar</h3>
+      <button class="num" onclick="toggleDrawer()">×</button>
+    </div>
+    <div class="cmds" id="cmds-container">
+      <!-- Lista ESTÁTICA: preservada. JSON (se existir) será APENAS anexado ao final. -->
+      <div class="cmd"># 1) Entrar como root, abrir o projeto, ativar venv e variáveis (terminal pronto)
+sudo bash -lc 'cd /srv/projects/ai-router; . .venv/bin/activate; set -a; . config/.env.local; set +a; exec bash -li'</div>
+      <button class="num" data-cmd="sudo bash -lc 'cd /srv/projects/ai-router; . .venv/bin/activate; set -a; . config/.env.local; set +a; exec bash -li'">1</button>
+
+      <div class="cmd"># 2) Virar root (modo administrativo)
+sudo -i</div>
+      <button class="num" data-cmd="sudo -i">2</button>
+
+      <div class="cmd"># 3) Ir para a pasta do projeto
+cd /srv/projects/ai-router</div>
+      <button class="num" data-cmd="cd /srv/projects/ai-router">3</button>
+
+      <div class="cmd"># 4) Ativar o ambiente Python e carregar variáveis locais
+. .venv/bin/activate && set -a; . config/.env.local; set +a</div>
+      <button class="num" data-cmd=". .venv/bin/activate && set -a; . config/.env.local; set +a">4</button>
+
+      <div class="cmd"># 5) Criar/atualizar o ambiente Python (usa requirements.txt)
+make venv</div>
+      <button class="num" data-cmd="make venv">5</button>
+
+      <div class="cmd"># 6) Carregar variáveis do projeto nesta janela do terminal
+make env</div>
+      <button class="num" data-cmd="make env">6</button>
+
+      <div class="cmd"># 7) Iniciar a API manualmente (modo desenvolvedor na mesma janela)
+make run</div>
+      <button class="num" data-cmd="make run">7</button>
+
+      <div class="cmd"># 8) Ver status do serviço em segundo plano (systemd)
+make status</div>
+      <button class="num" data-cmd="make status">8</button>
+
+      <div class="cmd"># 9) Reiniciar o serviço e checar saúde (corrige travadinhas comuns)
+make restart</div>
+      <button class="num" data-cmd="make restart">9</button>
+
+      <div class="cmd"># 10) Ver as últimas mensagens de log (erros e avisos)
+make logs</div>
+      <button class="num" data-cmd="make logs">10</button>
+
+      <div class="cmd"># 11) Fazer aquecimento (prepara cache e modelos)
+make warm</div>
+      <button class="num" data-cmd="make warm">11</button>
+
+      <div class="cmd"># 12) Teste rápido do roteador (um texto e um código)
+make smoke</div>
+      <button class="num" data-cmd="make smoke">12</button>
+
+      <div class="cmd"># 13) Testar modelo cloud barato (requer fallback ON)
+make test-nano</div>
+      <button class="num" data-cmd="make test-nano">13</button>
+
+      <div class="cmd"># 14) Testar modelo cloud “mini” (requer fallback ON)
+make test-mini</div>
+      <button class="num" data-cmd="make test-mini">14</button>
+
+      <div class="cmd"># 15) Testar modelo cloud “codex” (API de código; requer fallback ON)
+make test-codex</div>
+      <button class="num" data-cmd="make test-codex">15</button>
+
+      <div class="cmd"># 16) Testar modelo cloud avançado (requer fallback ON)
+make test-high</div>
+      <button class="num" data-cmd="make test-high">16</button>
+
+      <div class="cmd"># 17) Testar modelo local Llama (explicações/diálogo)
+make local-llama</div>
+      <button class="num" data-cmd="make local-llama">17</button>
+
+      <div class="cmd"># 18) Testar modelo local DeepSeek (geração de código)
+make local-deepseek</div>
+      <button class="num" data-cmd="make local-deepseek">18</button>
+
+      <div class="cmd"># 19) Mostrar estado do fallback cloud
+make cloud-status</div>
+      <button class="num" data-cmd="make cloud-status">19</button>
+
+      <div class="cmd"># 20) Ligar fallback cloud (usa chave já salva no .env.local)
+make cloud-on</div>
+      <button class="num" data-cmd="make cloud-on">20</button>
+
+      <div class="cmd"># 21) Desligar fallback cloud (custo zero)
+make cloud-off</div>
+      <button class="num" data-cmd="make cloud-off">21</button>
+
+      <div class="cmd"># 22) Backup completo (projeto, deps, .env e modelos Ollama)
+make backup-all</div>
+      <button class="num" data-cmd="make backup-all">22</button>
+
+      <div class="cmd"># 23) Instruções para restaurar modelos do Ollama
+make restore-ollama</div>
+      <button class="num" data-cmd="make restore-ollama">23</button>
+
+      <div class="cmd"># 24) Backup leve para a Área de Trabalho (sem segredos)
+scripts/BACKUP_DESKTOP.sh</div>
+      <button class="num" data-cmd="scripts/BACKUP_DESKTOP.sh">24</button>
+
+      <div class="cmd"># 25) Recuperação rápida (mata stress, reinicia serviços e valida)
+scripts/RECOVER_SAFE.sh</div>
+      <button class="num" data-cmd="scripts/RECOVER_SAFE.sh">25</button>
+
+      <div class="cmd"># 26) Modelos expostos no padrão OpenAI
+curl -fsS http://localhost:8082/v1/models | jq '.data[].id'</div>
+      <button class="num" data-cmd="curl -fsS http://localhost:8082/v1/models | jq '.data[].id'">26</button>
+
+      <div class="cmd"># 27) Chamada direta: exemplo de texto
+curl -s http://localhost:8082/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Explique HVAC em 1 frase."}]}' | python3 -m json.tool | sed -n '1,24p'</div>
+      <button class="num" data-cmd="curl -s http://localhost:8082/route -H 'content-type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Explique HVAC em 1 frase.\"}]}' | python3 -m json.tool | sed -n '1,24p'">27</button>
+
+      <div class="cmd"># 28) Chamada direta: exemplo de código
+curl -s http://localhost:8082/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Escreva uma função Python soma(n1,n2) com docstring."}],"prefer_code":true}' | python3 -m json.tool | sed -n '1,24p'</div>
+      <button class="num" data-cmd="curl -s http://localhost:8082/route -H 'content-type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Escreva uma função Python soma(n1,n2) com docstring.\"}],\"prefer_code\":true}' | python3 -m json.tool | sed -n '1,24p'">28</button>
+
+      <div class="cmd"># 29) Ver modelos locais do Ollama
+curl -fsS http://localhost:11434/api/tags | head</div>
+      <button class="num" data-cmd="curl -fsS http://localhost:11434/api/tags | head">29</button>
+
+      <div class="cmd"># 30) Subir manualmente na 8082 (se o serviço estiver parado)
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8082</div>
+      <button class="num" data-cmd="python -m uvicorn app.main:app --host 0.0.0.0 --port 8082">30</button>
+
+      <div class="cmd"># 31) Dev (reload) na 8083 — sem conflito com o serviço
+make run-dev</div>
+      <button class="num" data-cmd="make run-dev">31</button>
+
+      <div class="cmd"># 32) Parar o serviço (libera 8082)
+make stop</div>
+      <button class="num" data-cmd="make stop">32</button>
+
+      <div class="cmd"># 33) Forçar liberação da 8082 (se presa)
+make free-8082</div>
+      <button class="num" data-cmd="make free-8082">33</button>
+    </div>
+  </div>
+  <div id="toast" class="toast">Copiado ✓</div>
+
+<script>
+const T=document.getElementById('term'); const BASE='';
+function line(txt,cls){const d=document.createElement('div');d.className='row '+(cls||'');d.textContent=txt;T.prepend(d)}
+function dump(obj){const p=document.createElement('pre');p.textContent=JSON.stringify(obj,null,2);T.prepend(p)}
+async function get(u){const r=await fetch(BASE+u);const t=await r.text();try{dump(JSON.parse(t));line(`GET ${u} [${r.status}]`,r.ok?'ok':'err')}catch{line(t,'err')}}
+async function post(u,b){const r=await fetch(BASE+u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b||{})});const t=await r.text();try{dump(JSON.parse(t));line(`POST ${u} [${r.status}]`,r.ok?'ok':'err')}catch{line(t,'err')}}
+function test(name){post('/actions/test',{model:name})}
+function hint(){line('cd /srv/projects/ai-router && . .venv/bin/activate','ok'); line('set -a; . config/.env.local; set +a','ok')}
+function toggleDrawer(){const d=document.getElementById('drawer');d.classList.toggle('open');d.setAttribute('aria-hidden', d.classList.contains('open')?'false':'true')}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1200)}
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button.num');
+  if (!btn) return;
+  const cmd = btn.getAttribute('data-cmd');
+  if (!cmd) return;
+  navigator.clipboard.writeText(cmd.trim()).then(()=>toast('Comando copiado ✓'));
+});
+
+// --- Auto-sync OPCIONAL com public/guide_cmds.json ---
+// NUNCA substitui sua lista; apenas ANEXA novos itens ao final.
+// Evita duplicatas por comando (data-cmd) e continua a numeração.
+(async function syncCmdsAppend(){
+  try{
+    const res = await fetch('/public/guide_cmds.json', {cache:'no-store'});
+    if(!res.ok) return;
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (Array.isArray(data?.terminal) ? data.terminal : []);
+    if(!list.length) return;
+
+    const wrap = document.getElementById('cmds-container');
+    const existingBtns = wrap.querySelectorAll('button.num[data-cmd]');
+    const seen = new Set([...existingBtns].map(b => b.getAttribute('data-cmd') || ''));
+
+    let maxNum = 0;
+    for (const b of existingBtns) {
+      const n = parseInt(b.textContent.trim(), 10);
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    }
+    let nextNum = maxNum + 1;
+
+    const frag = document.createDocumentFragment();
+    for (const it of list) {
+      const cmd = (it.cmd ?? '').trim();
+      if (!cmd || seen.has(cmd)) continue;
+      const num = Number.isFinite(it.num) ? it.num : nextNum++;
+      const cmt = it.comment || '—';
+
+      const div = document.createElement('div');
+      div.className='cmd';
+      div.textContent = `# ${num}) ${cmt}\n${cmd}`;
+      const btn = document.createElement('button');
+      btn.className='num';
+      btn.textContent=String(num);
+      btn.setAttribute('data-cmd', cmd);
+
+      frag.appendChild(div);
+      frag.appendChild(btn);
+      seen.add(cmd);
+    }
+    wrap.appendChild(frag);
+  }catch{}
+})();
+</script>
+</body>
+</html>

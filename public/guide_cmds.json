@@ -1,0 +1,114 @@
+{
+  "terminal": [
+    {
+      "num": 1,
+      "cmd": "make venv",
+      "comment": "cria venv e instala requirements.txt   #comentario_tutor: 1a vez / atualizar deps"
+    },
+    {
+      "num": 2,
+      "cmd": "make env",
+      "comment": "carrega ENV desta sessão               #comentario_tutor: não afeta outras shells"
+    },
+    {
+      "num": 3,
+      "cmd": "make run",
+      "comment": "sobe FastAPI (foreground em 8082)      #comentario_tutor: CONFLITA se service ativo"
+    },
+    {
+      "num": 4,
+      "cmd": "make run-dev",
+      "comment": "sobe FastAPI (reload) em 8083          #comentario_tutor: ideal p/ debug, sem conflito"
+    },
+    {
+      "num": 5,
+      "cmd": "make stop",
+      "comment": "para o service systemd                 #comentario_tutor: libera 8082"
+    },
+    {
+      "num": 6,
+      "cmd": "make free-8082",
+      "comment": "força liberar porta 8082               #comentario_tutor: usa fuser/pkill"
+    },
+    {
+      "num": 7,
+      "cmd": "make status",
+      "comment": "status systemd                          #comentario_tutor: ver se está 'active (running)'"
+    },
+    {
+      "num": 8,
+      "cmd": "make restart",
+      "comment": "restart + healthz                       #comentario_tutor: reinicia serviço web"
+    },
+    {
+      "num": 9,
+      "cmd": "make logs",
+      "comment": "últimos logs                            #comentario_tutor: tail curto no journal"
+    },
+    {
+      "num": 10,
+      "cmd": "make warm",
+      "comment": "dispara warm-up                         #comentario_tutor: precompila e aquece cache"
+    },
+    {
+      "num": 11,
+      "cmd": "make smoke",
+      "comment": "smoke (texto+código)                    #comentario_tutor: valida roteador básico"
+    },
+    {
+      "num": 12,
+      "cmd": "make test-nano",
+      "comment": "OpenAI nano                             #comentario_tutor: requer fallback ON + chave"
+    },
+    {
+      "num": 13,
+      "cmd": "make test-mini",
+      "comment": "OpenAI mini                             #comentario_tutor: idem"
+    },
+    {
+      "num": 14,
+      "cmd": "make test-codex",
+      "comment": "OpenAI codex (Responses API)            #comentario_tutor: idem"
+    },
+    {
+      "num": 15,
+      "cmd": "make test-high",
+      "comment": "OpenAI gpt-5 (high)                     #comentario_tutor: idem"
+    },
+    {
+      "num": 16,
+      "cmd": "make local-llama",
+      "comment": "Llama local                             #comentario_tutor: GPU/CPU local"
+    },
+    {
+      "num": 17,
+      "cmd": "make local-deepseek",
+      "comment": "DeepSeek local                          #comentario_tutor: GPU/CPU local"
+    },
+    {
+      "num": 18,
+      "cmd": "make cloud-status",
+      "comment": "mostra estado do fallback cloud         #comentario_tutor: ON/OFF e se há chave"
+    },
+    {
+      "num": 19,
+      "cmd": "make cloud-on",
+      "comment": "liga fallback cloud (não mexe na chave) #comentario_tutor: só ENABLE_OPENAI_FALLBACK=1"
+    },
+    {
+      "num": 20,
+      "cmd": "make cloud-off",
+      "comment": "desliga fallback cloud                  #comentario_tutor: ENABLE_OPENAI_FALLBACK=0 (custo zero)"
+    },
+    {
+      "num": 21,
+      "cmd": "make backup-all",
+      "comment": "backup completo                         #comentario_tutor: projeto+lock+.env.local+ollama blobs"
+    },
+    {
+      "num": 22,
+      "cmd": "make restore-ollama",
+      "comment": "dica p/ restore de modelos ollama       #comentario_tutor: onde aplicar o tar"
+    }
+  ]
+}
