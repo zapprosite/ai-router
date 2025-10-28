@@ -87,17 +87,29 @@ def debug_where():
 @app.get("/v1/models")
 def list_models_openai():
     from graph.router import CONFIG_PATH
-    cfg = yaml.safe_load(open(CONFIG_PATH,"r"))
-    data=[]
+    data = []
     import time
-    for m in cfg.get("models",[]):
+    try:
+        cfg = yaml.safe_load(open(CONFIG_PATH, "r"))
+        for m in (cfg.get("models", []) if isinstance(cfg, dict) else []):
+            data.append({
+                "id": m.get("id") or m.get("name"),
+                "object": "model",
+                "owned_by": m.get("provider", "unknown"),
+                "created": int(time.time()),
+            })
+    except Exception:
+        # tolerate missing/invalid config on cold start; still expose router-auto
+        pass
+    # Ensure logical router model is present for OpenAI-compat clients
+    if not any((d.get("id") == "router-auto") for d in data):
         data.append({
-            "id": m.get("id") or m.get("name"),
-            "object":"model",
-            "owned_by": m.get("provider","unknown"),
-            "created": int(time.time())
+            "id": "router-auto",
+            "object": "model",
+            "owned_by": "router",
+            "created": int(time.time()),
         })
-    return {"object":"list","data":data}
+    return {"object": "list", "data": data}
 
 # --- Ações: smoke e teste de modelo ---
 from pydantic import BaseModel
@@ -141,6 +153,55 @@ def actions_test(body: TestReq):
 
 @app.get("/healthz")
 def healthz(): return {"ok": True}
+
+# --- OpenAI shim: /v1/chat/completions ---
+class _ChatMsg(BaseModel):
+    role: Literal["system","user","assistant","tool"]
+    content: str
+
+class _ChatReq(BaseModel):
+    model: str
+    messages: List[_ChatMsg]
+    temperature: Optional[float] = 0.2
+    max_tokens: Optional[int] = None
+
+@app.post("/v1/chat/completions")
+def _chat_completions(body: _ChatReq):
+    # Minimal heuristic to hint code preference
+    txt = "\n".join([m.content for m in body.messages if m.role in ("user","system")])
+    prefer_code = ("```" in txt) or ("def " in txt) or ("class " in txt) or ("traceback" in txt)
+    try:
+        out = router_app.invoke({
+            "messages": [m.model_dump() for m in body.messages],
+            "budget": "balanced",
+            "prefer_code": bool(prefer_code),
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    content = (
+        out.get("output")
+        or out.get("content")
+        or out.get("text")
+        or (out.get("message") or {}).get("content")
+        or ""
+    )
+    model_used = (out.get("usage") or {}).get("resolved_model_id") or "router-auto"
+    created = int(time.time())
+    return {
+        "id": f"chatcmpl-{created}",
+        "object": "chat.completion",
+        "created": created,
+        "model": model_used,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": out.get("usage", {}),
+    }
 
 @app.post("/route")
 def route(req: RouteRequest) -> Dict[str, Any]:
