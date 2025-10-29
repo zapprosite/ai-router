@@ -78,6 +78,16 @@ No Continue (VS Code):
 - Selecione `router-auto` para chat, edit, apply e autocomplete.
 - MCP: em agent mode, a ferramenta `ai_router.route` ficará disponível a partir do servidor `ai_router_mcp`. Peça ao agente para “usar a ferramenta ai_router.route” passando `messages`, `budget` (opcional) e `prefer_code` (opcional). A ferramenta chama `POST /route` e retorna `{content, usage}`.
 
+MCP (Opcional)
+- O MCP não é necessário para chat/edit/apply/autocomplete quando se usa `router-auto` via shim OpenAI. 
+- Use MCP apenas se quiser acionar `/route` como ferramenta (agent mode) ou integrar serviços como tools. Para reativar, adicione ao `.continue/config.yaml`:
+```yaml
+mcpServers:
+  - name: ai_router_mcp
+    command: python
+    args: ["tools/ai_router_mcp.py"]
+```
+
 Screenshot (selecionando `router-auto` nos 4 papéis):
 
 ![Continue VS Code — router-auto em chat/edit/apply/autocomplete](docs/images/continue-router-auto.png)

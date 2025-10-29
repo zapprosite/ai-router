@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys, os, argparse
 try:
-    import yaml  # PyYAML
+    import yaml
 except Exception:
     print("PyYAML é obrigatório: pip install pyyaml", file=sys.stderr)
     sys.exit(2)
@@ -12,7 +12,6 @@ def validate(path: str) -> list[str]:
     errs = []
     if not os.path.exists(path):
         return [f"missing {path}"]
-
     with open(path, "r", encoding="utf-8") as f:
         d = yaml.safe_load(f) or {}
 
@@ -33,7 +32,6 @@ def validate(path: str) -> list[str]:
         miss = sorted(list(REQ_ROLES - roles))
         if miss:
             errs.append(f"models.router-auto.roles missing: {', '.join(miss)}")
-        # existência apenas
         if "apiKey" not in m:
             errs.append("models.router-auto.apiKey field must exist (value not validated)")
 
@@ -43,18 +41,19 @@ def validate(path: str) -> list[str]:
         if a.get(k) != "router-auto":
             errs.append(f"agent.{k} must be 'router-auto'")
 
-    # mcpServers.ai_router_mcp
-    mcps = d.get("mcpServers") or []
-    srv = next((s for s in mcps if (s or {}).get("name") == "ai_router_mcp"), None)
-    if not srv:
-        errs.append("mcpServers: ai_router_mcp missing")
-    else:
-        if not srv.get("command"):
-            errs.append("mcpServers.ai_router_mcp.command missing")
-        args = srv.get("args")
-        if not isinstance(args, list) or not args:
-            errs.append("mcpServers.ai_router_mcp.args missing or empty")
-
+    # MCP opcional: só validar se presente
+    mcps = d.get("mcpServers")
+    if mcps is not None:
+        if not isinstance(mcps, list):
+            errs.append("mcpServers must be a list if present")
+        else:
+            srv = next((s for s in mcps if (s or {}).get("name") == "ai_router_mcp"), None)
+            if srv:
+                if not srv.get("command"):
+                    errs.append("mcpServers.ai_router_mcp.command missing")
+                args = srv.get("args")
+                if not isinstance(args, list) or not args:
+                    errs.append("mcpServers.ai_router_mcp.args missing or empty")
     return errs
 
 def main():
@@ -63,8 +62,7 @@ def main():
     args = p.parse_args()
     errs = validate(args.path)
     if errs:
-        print("\n".join(errs))
-        sys.exit(1)
+        print("\n".join(errs)); sys.exit(1)
     print("continue-config: OK")
 
 if __name__ == "__main__":
