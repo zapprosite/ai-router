@@ -23,6 +23,12 @@ CODE_COMPLEX_RE = re.compile(TH["code_complex_regex"], re.I)
 def _has_openai()->bool:
     return bool(os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_TIER2"))
 
+def _fallback_enabled()->bool:
+    # Fallback only when explicitly enabled AND key exists
+    if str(os.getenv("ENABLE_OPENAI_FALLBACK", "0")).strip() != "1":
+        return False
+    return _has_openai()
+
 # ---------- State ----------
 class RouterState(TypedDict, total=False):
     messages: List[Dict[str, str]]
@@ -56,10 +62,10 @@ def pick_model_id(state: RouterState) -> str:
     budget = (state.get("budget") or "balanced").lower()
     prefer_code = bool(state.get("prefer_code", False))
     prefer_cheap = bool(BUD.get(budget, {}).get("prefer_cheap", True))
-    openai_on = _has_openai()
-
+    # openai_on no longer drives routing choice; local-first always
     if is_long_input(msgs):
-        return "gpt-5-high" if openai_on else "deepseek-coder-v2-16b"
+        # Inputs muito longos: mantenha local-first (DeepSeek 16B)
+        return "deepseek-coder-v2-16b"
 
     if prefer_code or is_code_complex(msgs):
         return "deepseek-coder-v2-16b"
@@ -105,10 +111,13 @@ def _sla_wrap(runnable):
     if not SLA.get("enabled", True):
         return runnable
     threshold = float(SLA.get("latency_sec", 6))
-    cloud_pref = {
-        "llama-3.1-8b-instruct": (CHAIN_MINI,) if _has_openai() else tuple(),
-        "deepseek-coder-v2-16b": (CHAIN_CODEX, CHAIN_MINI) if _has_openai() else tuple(),
-    }
+    if _fallback_enabled():
+        cloud_pref = {
+            "llama-3.1-8b-instruct": (CHAIN_MINI,),
+            "deepseek-coder-v2-16b": (CHAIN_CODEX, CHAIN_MINI),
+        }
+    else:
+        cloud_pref = {}
     def _call(x: Dict[str,Any]):
         start = time.perf_counter()
         try:
