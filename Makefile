@@ -253,3 +253,7 @@ docs-verify:
 .PHONY: test-continue
 test-continue:
 	@pytest -q tests/test_chat_completions.py
+
+.PHONY: check-continue-config
+check-continue-config:
+	python3 scripts/validate_continue_config.py
