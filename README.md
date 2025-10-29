@@ -1,10 +1,16 @@
-# AI Router — Local-first com fallback Tier‑2 (LangChain 1.0 + LangGraph 1.0 + Ollama)
+# AI Router — Local‑first (Ollama) com fallback Tier‑2
 
-Roteador de prompts simples, eficiente e econômico. Prioriza modelos locais (Ollama) e só escala para nuvem (OpenAI, Tier‑2) quando o SLA exigir.
+![python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![fastapi](https://img.shields.io/badge/FastAPI-0.120.x-009688?logo=fastapi&logoColor=white)
+![langchain](https://img.shields.io/badge/LangChain-1.x-2C3E50)
+![langgraph](https://img.shields.io/badge/LangGraph-1.0-2C3E50)
+![ollama](https://img.shields.io/badge/Ollama-local-000000?logo=ollama)
 
-Fluxo (alto nível)
+Roteador de prompts simples, eficiente e econômico. Prioriza modelos locais (Ollama) e só escala para nuvem (OpenAI, Tier‑2) somente quando o SLA exigir.
 
-```
+Resumo do fluxo
+
+```text
  Cliente → FastAPI (8082) → Router (LCEL/RunnableBranch)
                     ├─ Código/traceback/prefer_code → DeepSeek Coder v2 (16B, Ollama)
                     └─ Texto curto/explicação       → Llama 3.1 Instruct (8B, Ollama)
@@ -16,9 +22,20 @@ Fluxo (alto nível)
 - Portas: serviço `8082` (systemd), dev `8083` (`make run-dev`).
 
 Links rápidos
-- Painel: abra `http://localhost:8082/guide` (botões copiam somente o comando; Terminal embutido).
+- Painel: `http://localhost:8082/guide` (botões copiam o comando; terminal embutido).
 - Modelos (compat OpenAI): `GET http://localhost:8082/v1/models`.
 - Saúde: `GET/HEAD http://localhost:8082/healthz`.
+
+Tabela de Conteúdos
+- Quickstart
+- Comandos (Makefile)
+- Roteamento (resumo)
+- Endpoints
+- Testes
+- Troubleshooting
+- Segurança de segredos
+- Documentação relacionada
+- Backup & Restore
 
 ## Quickstart (3 passos)
 
@@ -70,7 +87,7 @@ curl -fsS http://localhost:8082/healthz && echo OK
 - `GET/HEAD /healthz` → `{ "ok": true }`.
 - `GET /debug/where` → caminhos de config, módulos e env ativos.
 - `GET /v1/models` → lista de modelos registrados (compat OpenAI).
-- `POST /route` → roteamento inteligente; resposta inclui `model_id` e `usage.resolved_model_name`.
+- `POST /route` → roteamento inteligente; resposta inclui `usage.resolved_model_id` e métricas.
 - `GET /guide` e `GET /` → painel; raiz redireciona para `/guide` (302).
 
 ## Como rodar testes
@@ -113,6 +130,9 @@ pytest -q -k "not e2e"
 - `docs/CONTINUE.md` — Continue.dev + router-auto (OpenAI shim + MCP) Quickstart.
 
 ## Backup & Restore
+
+Nota de Arquitetura
+- Diagramas Mermaid e detalhes de decisão/fluxo em `docs/ARCHITECTURE.md`.
 
 - Backup completo: `make backup-all` (projeto, lock, `.env.local` com 600, blobs do Ollama).
 - Backup leve para Desktop (sem segredos; Ollama como manifests): `scripts/BACKUP_DESKTOP.sh`.

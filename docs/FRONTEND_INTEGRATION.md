@@ -19,6 +19,115 @@ Content-Type: application/json
 }
 ```
 
+Esquemas de Requisição/Resposta (JSON Schema)
+
+Rota principal — `POST /route`
+
+Request
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["messages"],
+  "additionalProperties": false,
+  "properties": {
+    "messages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+          "role": {"enum": ["system", "user", "assistant", "tool"]},
+          "content": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "latency_ms_max": {"type": "integer", "minimum": 0},
+    "budget": {"enum": ["low", "balanced", "high"]},
+    "prefer_code": {"type": "boolean"}
+  }
+}
+```
+
+Response
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["output", "usage"],
+  "properties": {
+    "output": {"type": "string"},
+    "usage": {
+      "type": "object",
+      "required": [
+        "prompt_tokens_est",
+        "completion_tokens_est",
+        "total_tokens_est",
+        "resolved_model_id",
+        "config_path"
+      ],
+      "properties": {
+        "prompt_tokens_est": {"type": "integer"},
+        "completion_tokens_est": {"type": "integer"},
+        "total_tokens_est": {"type": "integer"},
+        "resolved_model_id": {"type": "string"},
+        "config_path": {"type": "string"},
+        "latency_ms_router": {"type": "integer"}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
+```
+
+OpenAI (shim) — `POST /v1/chat/completions`
+
+Request (mínimo viável)
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["model", "messages"],
+  "properties": {
+    "model": {"const": "router-auto"},
+    "messages": {
+      "type": "array",
+      "items": {"type": "object", "required": ["role", "content"],
+        "properties": {"role": {"type": "string"}, "content": {"type": "string"}}}
+    },
+    "temperature": {"type": "number"},
+    "max_tokens": {"type": ["integer", "null"]}
+  }
+}
+```
+
+Response (formato OpenAI)
+```json
+{
+  "id": "chatcmpl-…",
+  "object": "chat.completion",
+  "created": 1730140000,
+  "model": "llama-3.1-8b-instruct",
+  "choices": [
+    {"index": 0, "message": {"role": "assistant", "content": "…"}, "finish_reason": "stop"}
+  ],
+  "usage": {"resolved_model_id": "llama-3.1-8b-instruct", "total_tokens_est": 123}
+}
+```
+
+Status Codes
+- 200: sucesso
+- 400: payload inválido (pydantic)
+- 500: erro interno do provider/roteador
+
+Formato de erro (FastAPI)
+```json
+{"detail": "<descrição do erro>"}
+```
+
 Exemplos curl
 
 Texto curto (esperado Llama 8B)
@@ -32,7 +141,7 @@ Código com prefer_code (esperado DeepSeek 16B)
 ```bash
 curl -s http://localhost:8082/route -H 'content-type: application/json' \
   -d '{"messages":[{"role":"user","content":"Escreva uma função Python soma(n1,n2) com docstring."}],"prefer_code":true}' \
-  | python3 -m json.tool | sed -n '1,24p'
+| python3 -m json.tool | sed -n '1,24p'
 ```
 
 Resolução dinâmica (`model_id`)
@@ -41,6 +150,7 @@ Resolução dinâmica (`model_id`)
 
 Cabeçalhos relevantes
 - `Content-Type: application/json`.
+
 
 ## Continue.dev (VS Code) — router-auto + MCP
 

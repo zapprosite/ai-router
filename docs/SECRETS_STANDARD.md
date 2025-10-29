@@ -20,3 +20,36 @@ make cloud-status
 make cloud-on
 make cloud-off
 ```
+
+Exemplo de arquivo (`config/.env.local`)
+
+> Dica: existe suporte no `.gitignore` para versionar somente `config/.env.example`. Mantenha o seu `.env.local` fora do git.
+
+```dotenv
+# --- Core ---
+CORS_ALLOW_ORIGINS=*
+
+# --- Ollama ---
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TEMPERATURE=0.1
+
+# --- OpenAI (fallback opcional) ---
+ENABLE_OPENAI_FALLBACK=0
+OPENAI_API_KEY_TIER2=
+OPENAI_BASE_URL=
+OPENAI_TEMPERATURE=0.0
+OPENAI_MAX_RETRIES=2
+OPENAI_TIMEOUT_SEC=20
+OPENAI_REASONING_EFFORT=
+OPENAI_ORGANIZATION=
+OPENAI_PROJECT=
+
+# --- Router ---
+ROUTER_CONFIG=config/router_config.yaml
+```
+
+Checklist rápido
+- Carregar variáveis: `. .venv/bin/activate && set -a; . config/.env.local; set +a`
+- Verificar leitura: `make env`
+- Validar saúde: `curl -fsS http://localhost:8082/healthz && echo OK`
+- Listar modelos: `curl -fsS http://localhost:8082/v1/models | jq` (deve conter `router-auto`)

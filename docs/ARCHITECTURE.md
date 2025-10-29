@@ -2,6 +2,8 @@
 
 Componentes principais e fluxo de decisão. Minimalista, porém robusto.
 
+> Diagramas Mermaid abaixo: compatível com renderização no GitHub.
+
 ## Componentes
 
 - `app/` (FastAPI)
@@ -25,27 +27,60 @@ Portas
 
 ## Fluxo (alto nível)
 
-```
-Cliente → FastAPI (8082) → Router (LCEL/RunnableBranch)
-                  ├─ Código/traceback/prefer_code → DeepSeek Coder v2 (16B, Ollama)
-                  └─ Texto curto/explicação       → Llama 3.1 Instruct (8B, Ollama)
-                     ↘ (opcional) Fallback → OpenAI (gpt‑5‑nano/mini/codex/gpt‑5)
+```mermaid
+flowchart LR
+    A[Client] --> B[FastAPI 8082]
+    B --> C[Router<br/>LCEL / LangGraph]
+    C -->|código / prefer_code| D[DeepSeek Coder v2 16B (Ollama)]
+    C -->|texto curto / explicação| E[Llama 3.1 8B Instruct (Ollama)]
+    C -->|SLA violado ou falha<br/>+ fallback ON| F[(OpenAI Tier‑2)]
+    D --> G[(Resposta)]
+    E --> G
+    F --> G
 ```
 
 Pré‑requisitos: Ollama em `http://localhost:11434` com os modelos já baixados (`ollama pull`).
 
 ## Árvore de decisão (resumo)
 
+```mermaid
+stateDiagram-v2
+    [*] --> Decide
+    Decide --> DeepSeek: prefer_code == true
+    Decide --> DeepSeek: detecta código / traceback
+    Decide --> Llama: texto curto / explicação
+    DeepSeek --> SLA: executa local
+    Llama --> SLA: executa local
+    SLA --> OpenAI: p95 > sla.latency_sec AND fallback ON
+    SLA --> [*]: sucesso local
 ```
-if prefer_code == true
-  → DeepSeek 16B (local)
-else if detecta padrões de código (def/class/import/traceback/```…```)
-  → DeepSeek 16B (local)
-else
-  → Llama 8B Instruct (local)
 
-se ENABLE_OPENAI_FALLBACK=1 e (violou SLA TIER2_LATENCY_THRESHOLD_SEC ou houve falha local)
-  → escalar para OpenAI (gpt‑5‑mini/nano/codex/gpt‑5 conforme tipo)
+## Sequência de chamada
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant FE as Client/Frontend
+    participant API as FastAPI 8082
+    participant R as Router (LCEL/LangGraph)
+    participant L8 as Llama 3.1 8B (Ollama)
+    participant DS as DeepSeek Coder v2 16B (Ollama)
+    participant OAI as OpenAI (Tier‑2)
+    FE->>API: POST /route {messages, prefer_code, budget}
+    API->>R: invoke(state)
+    alt prefer code ou código detectado
+        R->>DS: messages
+        DS-->>R: output
+    else texto curto/explicação
+        R->>L8: messages
+        L8-->>R: output
+    end
+    opt SLA violado ou erro (fallback ON)
+        R->>OAI: messages (nano/mini/codex/gpt‑5)
+        OAI-->>R: output
+    end
+    R-->>API: {output, usage{...}}
+    API-->>FE: 200 {output, usage}
 ```
 
 Observações
