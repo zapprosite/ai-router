@@ -37,3 +37,13 @@ mcpServers:
     args: ["tools/ai_router_mcp.py"]
 ```
 
+### MCP (Opcional)
+O shim OpenAI já habilita o Continue com um único modelo lógico `router-auto` sem necessidade de MCP. 
+Use MCP apenas se quiser acionar `/route` como ferramenta em agent mode, ou integrar serviços (Stripe, Supabase, etc.) como tools.
+Para reativar o MCP, acrescente ao `.continue/config.yaml`:
+```yaml
+mcpServers:
+  - name: ai_router_mcp
+    command: python
+    args: ["tools/ai_router_mcp.py"]
+```

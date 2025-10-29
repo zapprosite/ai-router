@@ -17,9 +17,3 @@ agent:
   editModel: router-auto
   applyModel: router-auto
   autocompleteModel: router-auto
-
-mcpServers:
-  - name: ai_router_mcp
-    command: python
-    args: ["tools/ai_router_mcp.py"]
-
