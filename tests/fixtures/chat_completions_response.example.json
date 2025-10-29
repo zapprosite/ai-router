@@ -1,0 +1,19 @@
+{
+  "id": "chatcmpl-example",
+  "object": "chat.completion",
+  "created": 1730150400,
+  "model": "llama-3.1-8b-instruct",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "HVAC controls indoor temperature and air quality by heating, cooling, and ventilating spaces."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "resolved_model_id": "llama-3.1-8b-instruct"
+  }
+}
