@@ -1,1 +1,4 @@
-* @zapprosite
+/.continue/config.yaml               @zapprosite
+/scripts/validate_continue_config.py @zapprosite
+/docs/CONTINUE.md                    @zapprosite
+/docs/FRONTEND_INTEGRATION.md        @zapprosite
