@@ -2,7 +2,7 @@
 import sys, os, argparse
 try:
     import yaml  # PyYAML
-except Exception as e:
+except Exception:
     print("PyYAML é obrigatório: pip install pyyaml", file=sys.stderr)
     sys.exit(2)
 
@@ -12,9 +12,11 @@ def validate(path: str) -> list[str]:
     errs = []
     if not os.path.exists(path):
         return [f"missing {path}"]
+
     with open(path, "r", encoding="utf-8") as f:
         d = yaml.safe_load(f) or {}
-    # models
+
+    # models.router-auto
     models = d.get("models") or []
     m = next((x for x in models if (x or {}).get("name") == "router-auto"), None)
     if not m:
@@ -28,18 +30,31 @@ def validate(path: str) -> list[str]:
         if not api_base.endswith("/v1"):
             errs.append("models.router-auto.apiBase must end with '/v1'")
         roles = set(m.get("roles") or [])
-        missing_roles = sorted(list(REQ_ROLES - roles))
-        if missing_roles:
-            errs.append(f"models.router-auto.roles missing: {', '.join(missing_roles)}")
-    # agent
+        miss = sorted(list(REQ_ROLES - roles))
+        if miss:
+            errs.append(f"models.router-auto.roles missing: {', '.join(miss)}")
+        # existência apenas
+        if "apiKey" not in m:
+            errs.append("models.router-auto.apiKey field must exist (value not validated)")
+
+    # agent.*
     a = d.get("agent") or {}
     for k in ["chatModel","editModel","applyModel","autocompleteModel"]:
         if a.get(k) != "router-auto":
             errs.append(f"agent.{k} must be 'router-auto'")
-    # MCP
+
+    # mcpServers.ai_router_mcp
     mcps = d.get("mcpServers") or []
-    if not any((s or {}).get("name") == "ai_router_mcp" for s in mcps):
+    srv = next((s for s in mcps if (s or {}).get("name") == "ai_router_mcp"), None)
+    if not srv:
         errs.append("mcpServers: ai_router_mcp missing")
+    else:
+        if not srv.get("command"):
+            errs.append("mcpServers.ai_router_mcp.command missing")
+        args = srv.get("args")
+        if not isinstance(args, list) or not args:
+            errs.append("mcpServers.ai_router_mcp.args missing or empty")
+
     return errs
 
 def main():
@@ -54,4 +69,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

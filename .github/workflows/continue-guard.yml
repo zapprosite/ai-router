@@ -11,7 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -24,4 +25,4 @@ jobs:
       - name: Link check (docs + README)
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress --accept 200,206,429 "docs/**/*.md" "README.md"
+          args: --no-progress --exclude-mail --accept 200,206,429 "docs/**/*.md" "README.md"
