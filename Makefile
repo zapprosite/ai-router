@@ -252,7 +252,12 @@ docs-verify:
 
 .PHONY: test-continue
 test-continue:
-	@pytest -q tests/test_chat_completions.py
+	@. $(VENV)/bin/activate && PYTHONPATH=$(PWD) python -m pytest -q tests/test_chat_completions.py
+
+.PHONY: kill-8082
+kill-8082:
+	@p=$$(ss -ltnp 2>/dev/null | awk '/:8082 /{print $$7}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p'); \
+	[ -z "$$p" ] || (echo "Killing $$p" && kill -9 $$p) || true
 
 .PHONY: check-continue-config
 check-continue-config:
