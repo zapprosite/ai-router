@@ -110,6 +110,7 @@ pytest -q -k "not e2e"
 - `docs/AGENTS.md` — diretrizes para agentes/automação.
 - `docs/guide.md` — como usar e sincronizar o painel `/guide`.
 - `docs/guia_de_test.md` — roteiro de testes, stress e recuperação.
+- `docs/CONTINUE.md` — Continue.dev + router-auto (OpenAI shim + MCP) Quickstart.
 
 ## Backup & Restore
 

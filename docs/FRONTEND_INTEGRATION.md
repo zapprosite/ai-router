@@ -84,6 +84,9 @@ Screenshot (selecionando `router-auto` nos 4 papéis):
 
 Coloque a captura de tela no caminho `docs/images/continue-router-auto.png`.
 
+Mais detalhes e Quickstart do Continue:
+- Consulte `docs/CONTINUE.md` para configuração completa (`.continue/config.yaml`) e passos no VS Code.
+
 ### Exemplo: Chat Completions (OpenAI)
 
 O shim adiciona `POST /v1/chat/completions` e mapeia para o roteador. Use `model: "router-auto"`:
