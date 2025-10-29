@@ -113,3 +113,36 @@ Resposta (formato OpenAI), onde `model` reflete o modelo real resolvido pelo rot
   "usage": {"resolved_model_id":"llama-3.1-8b-instruct", "...": "..."}
 }
 ```
+
+### Verify locally
+
+```bash
+curl -fsS http://localhost:8082/healthz
+curl -fsS http://localhost:8082/v1/models | jq -r '.data[].id' | grep router-auto
+curl -fsS http://localhost:8082/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"router-auto","messages":[{"role":"user","content":"Explain HVAC in one sentence."}]}' | jq .
+```
+
+Esperado: o campo `.model` deve ser igual ao backend escolhido (valor de `usage.resolved_model_id`).
+
+### MCP tool usage
+
+Rode o Continue em modo agente (agent mode) e chame a ferramenta:
+
+- Nome do servidor: `ai_router_mcp`
+- Ferramenta: `ai_router.route`
+- Args:
+
+```json
+{
+  "messages": [{"role":"user","content":"Summarize the repo structure."}],
+  "budget": "balanced",
+  "prefer_code": false
+}
+```
+
+### Troubleshooting
+
+- Se `router-auto` não aparecer em `/v1/models`, reinicie o app e verifique novamente. O shim injeta o `router-auto` em cold start.
+- Se o shim de chat responder sem `.choices`, cheque os logs do app e confirme que `/route` está acessível.
