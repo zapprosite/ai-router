@@ -1,5 +1,6 @@
 # Registry de modelos + thresholds (preferir local; fallback cloud)
 models:
+  # === OLLAMA LOCAL (Camada 1 - 80-85%) ===
   - id: llama-3.1-8b-instruct
     provider: ollama
     name: "llama3.1:8b-instruct-q5_K_M"
@@ -10,6 +11,7 @@ models:
     name: "deepseek-coder-v2:16b"
     base_url: "http://localhost:11434"
 
+  # === OPENAI CLOUD (Camada 2 - Budget) ===
   - id: gpt-5-nano
     provider: openai
     name: "gpt-5-nano"
@@ -18,25 +20,52 @@ models:
     provider: openai
     name: "gpt-5-mini"
 
-  - id: gpt-5-codex
+  # === OPENAI CODEX (Camada 2/3 - Código) ===
+  - id: gpt-5.1-codex-mini
     provider: openai
-    name: "gpt-5-codex"
+    name: "gpt-5.1-codex-mini"
 
-  - id: gpt-5-high
+  - id: gpt-5.1-codex
     provider: openai
-    name: "gpt-5"
+    name: "gpt-5.1-codex"
+
+  # === OPENAI REASONING (Camada 3/4 - Premium) ===
+  - id: o3-mini-high
+    provider: openai
+    name: "o3-mini-high"
+
+  - id: o4-mini
+    provider: openai
+    name: "o4-mini"
+
+  - id: o3
+    provider: openai
+    name: "o3"
 
 thresholds:
   long_tokens: 12000
   code_simple_max_tokens: 800
-  code_hint_regex: "(```|\\bdef\\b|\\bclass\\b|\\bimport\\b|\\bfunction\\b|SELECT\\s|INSERT\\s|traceback|Exception:|#include|public\\s+static\\s+void|\\{|\\}|;)"
-  code_complex_regex: "(Traceback|stack\\s*trace|refactor|multi(-|\\s*)file|tool-?use|regex\\b|benchmark|deadlock|race\\s*condition)"
+  code_medium_max_tokens: 2000
+  code_large_max_tokens: 5000
+  code_hint_regex: "(```
+  code_complex_regex: "(Traceback|stack\\s*trace|refactor|multi(-|\\s*)file|tool-?use|regex\\b|benchmark|deadlock|race\\s*condition|architecture|system\\s+design)"
 
 budget:
-  low: { prefer_cheap: true }
-  balanced: { prefer_cheap: true }
-  high: { prefer_cheap: false }
+  low: { prefer_cheap: true, max_cost_usd: 0.10 }
+  balanced: { prefer_cheap: true, max_cost_usd: 0.50 }
+  high: { prefer_cheap: false, max_cost_usd: 5.00 }
 
 sla:
   enabled: true
   latency_sec: 6
+  fallback_on_error: true
+  retry_attempts: 2
+
+routing:
+  # Ordem de prioridade por tipo de tarefa
+  code_small: ["deepseek-coder-v2-16b", "gpt-5.1-codex-mini"]
+  code_medium: ["deepseek-coder-v2-16b", "gpt-5.1-codex-mini", "gpt-5.1-codex"]
+  code_large: ["gpt-5.1-codex", "o3-mini-high"]
+  code_critical: ["o3", "o3-mini-high"]
+  text_simple: ["llama-3.1-8b-instruct", "gpt-5-nano"]
+  text_advanced: ["llama-3.1-8b-instruct", "gpt-5-mini"]
