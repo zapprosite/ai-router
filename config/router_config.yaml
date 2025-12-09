@@ -1,71 +1,274 @@
-# Registry de modelos + thresholds (preferir local; fallback cloud)
+# AI Router Configuration - Automatic Complexity-Aware Routing
+# No manual flags required. The router infers intent from prompts.
+
 models:
-  # === OLLAMA LOCAL (Camada 1 - 80-85%) ===
+  # === TIER 1: LOCAL FAST (Ollama) ===
   - id: llama-3.1-8b-instruct
     provider: ollama
     name: "llama3.1:8b-instruct-q5_K_M"
     base_url: "http://localhost:11434"
+    tier: 1
+    capabilities: ["chitchat", "translation", "summary", "simple_qa"]
 
   - id: deepseek-coder-v2-16b
     provider: ollama
     name: "deepseek-coder-v2:16b"
     base_url: "http://localhost:11434"
+    tier: 2
+    capabilities: ["code_gen", "code_review", "data_analysis"]
 
-  # === OPENAI CLOUD (Camada 2 - Budget) ===
-  - id: gpt-5-nano
+  # === TIER 2: CLOUD BUDGET (OpenAI) ===
+  - id: gpt-4.1-nano
     provider: openai
-    name: "gpt-5-nano"
+    name: "gpt-4.1-nano"
+    tier: 2
+    capabilities: ["classification", "routing_judge"]
 
-  - id: gpt-5-mini
+  - id: gpt-4o-mini
     provider: openai
-    name: "gpt-5-mini"
+    name: "gpt-4o-mini"
+    tier: 2
+    capabilities: ["chitchat", "translation", "summary"]
 
-  # === OPENAI CODEX (Camada 2/3 - Código) ===
-  - id: gpt-5.1-codex-mini
+  # === TIER 3: CLOUD CODE (OpenAI GPT-4.1) ===
+  - id: gpt-4.1-mini
     provider: openai
-    name: "gpt-5.1-codex-mini"
+    name: "gpt-4.1-mini"
+    tier: 3
+    capabilities: ["code_gen", "code_review"]
 
-  - id: gpt-5.1-codex
+  - id: gpt-4.1
     provider: openai
-    name: "gpt-5.1-codex"
+    name: "gpt-4.1"
+    tier: 3
+    capabilities: ["code_gen", "code_review", "code_crit_debug", "system_design"]
 
-  # === OPENAI REASONING (Camada 3/4 - Premium) ===
-  - id: o3-mini-high
+  # === TIER 4: CLOUD REASONING (OpenAI Premium) ===
+  - id: o3-mini
     provider: openai
-    name: "o3-mini-high"
+    name: "o3-mini"
+    tier: 4
+    capabilities: ["reasoning", "system_design", "code_crit_debug"]
 
-  - id: o4-mini
+  - id: o1
     provider: openai
-    name: "o4-mini"
+    name: "o1"
+    tier: 4
+    capabilities: ["reasoning", "research"]
 
   - id: o3
     provider: openai
     name: "o3"
+    tier: 4
+    capabilities: ["reasoning", "system_design", "code_crit_debug", "research"]
 
-thresholds:
-  long_tokens: 12000
-  code_simple_max_tokens: 800
-  code_medium_max_tokens: 2000
-  code_large_max_tokens: 5000
-  code_hint_regex: "(```
-  code_complex_regex: "(Traceback|stack\\s*trace|refactor|multi(-|\\s*)file|tool-?use|regex\\b|benchmark|deadlock|race\\s*condition|architecture|system\\s+design)"
+  # === TIER 5: CLOUD ELITE (GPT-5.1 - 2025) ===
+  - id: gpt-5.1-high
+    provider: openai
+    name: "gpt-5.1-high"
+    tier: 5
+    capabilities: ["reasoning", "research", "creative_writing"]
 
-budget:
-  low: { prefer_cheap: true, max_cost_usd: 0.10 }
-  balanced: { prefer_cheap: true, max_cost_usd: 0.50 }
-  high: { prefer_cheap: false, max_cost_usd: 5.00 }
+  - id: gpt-5.1-codex-mini
+    provider: openai
+    name: "gpt-5.1-codex-mini"
+    tier: 5
+    capabilities: ["code_gen", "code_review"]
 
+  - id: gpt-5.1-codex-high
+    provider: openai
+    name: "gpt-5.1-codex-high"
+    tier: 5
+    capabilities: ["code_crit_debug", "system_design", "refactoring"]
+
+# ---------- AUTOMATIC CLASSIFICATION ----------
+# Task types the classifier can detect
+task_types:
+  chitchat:
+    description: "Casual conversation, greetings, simple questions"
+    keywords: ["hello", "thanks", "how are you", "what's up", "good morning"]
+    regex: "\\b(hi|hey|hola)\\b"
+    complexity_default: "low"
+  
+  simple_qa:
+    description: "Factual questions with short answers"
+    keywords: ["what is", "who is", "when did", "where is", "how many"]
+    complexity_default: "low"
+  
+  translation:
+    description: "Language translation requests"
+    keywords: ["translate", "traduzir", "traducir", "in english", "em português"]
+    complexity_default: "low"
+  
+  summary:
+    description: "Summarization requests"
+    keywords: ["summarize", "tldr", "summary", "brief", "resumo"]
+    complexity_default: "low"
+  
+  code_gen:
+    description: "Code generation (functions, scripts, snippets)"
+    keywords: ["write code", "create function", "implement", "script", "```", "backend", "frontend", "api", "fastapi"]
+    regex: "(def |class |function |import |```)"
+    complexity_default: "medium"
+  
+  code_review:
+    description: "Code review, debugging simple issues"
+    keywords: ["review", "debug", "fix this", "what's wrong", "fix error", "fix code"]
+    regex: "(Traceback|Error:|Exception|fixed)"
+    complexity_default: "medium"
+  
+  code_crit_debug:
+    description: "Critical debugging (deadlocks, race conditions, memory leaks)"
+    keywords: ["deadlock", "race condition", "memory leak", "segfault", "core dump"]
+    regex: "(deadlock|race\\s*condition|memory\\s*leak|security\\s+vulnerability|production\\s+incident|postmortem)"
+    complexity_default: "critical"
+  
+  system_design:
+    description: "Architecture, system design, distributed systems"
+    keywords: ["architecture", "system design", "distributed", "scalability", "microservices"]
+    regex: "(architecture|system\\s+design|distributed|failover|high\\s+availability)"
+    complexity_default: "high"
+  
+  data_analysis:
+    description: "Data analysis, statistics, ML"
+    keywords: ["analyze", "statistics", "chart", "graph", "dataset"]
+    complexity_default: "medium"
+  
+  research:
+    description: "Multi-step research, comparison, deep analysis"
+    keywords: ["research", "compare", "analyze", "prove", "explain in detail"]
+    complexity_default: "high"
+  
+  reasoning:
+    description: "Complex reasoning, logical puzzles, math proofs"
+    keywords: ["prove", "derive", "why does", "step by step", "reasoning"]
+    regex: "(prove|derive|logical|theorem|step\\s+by\\s+step)"
+    complexity_default: "high"
+
+# ---------- COMPLEXITY INDICATORS ----------
+complexity_signals:
+  low:
+    max_tokens: 200
+    indicators: ["short prompt", "single question", "greeting"]
+  
+  medium:
+    max_tokens: 1000
+    indicators: ["code snippet", "specific question", "single file"]
+  
+  high:
+    max_tokens: 5000
+    indicators: ["stack trace", "multi-file", "design request", "numbered steps"]
+    regex: "(multi(-|\\s*)file|numbered\\s+steps|\\d+\\.\\s+\\w+.*\\d+\\.\\s+\\w+)"
+  
+  critical:
+    indicators: ["production", "security", "incident", "outage", "deadlock"]
+    force_cloud: true
+
+# ---------- ROUTING POLICY TABLE ----------
+# Maps (task, complexity) -> preferred model tiers
+routing_policy:
+  # Chitchat / Simple
+  chitchat:
+    low: ["llama-3.1-8b-instruct"]
+    medium: ["llama-3.1-8b-instruct", "gpt-4o-mini"]
+  
+  simple_qa:
+    low: ["llama-3.1-8b-instruct"]
+    medium: ["llama-3.1-8b-instruct", "gpt-4o-mini"]
+  
+  translation:
+    low: ["llama-3.1-8b-instruct"]
+    medium: ["llama-3.1-8b-instruct", "gpt-4o-mini"]
+  
+  summary:
+    low: ["llama-3.1-8b-instruct"]
+    medium: ["llama-3.1-8b-instruct"]
+    high: ["gpt-4o-mini", "gpt-4.1"]
+  
+  # Code Tasks
+  code_gen:
+    low: ["deepseek-coder-v2-16b"]
+    medium: ["deepseek-coder-v2-16b", "gpt-4.1-mini"]
+    high: ["deepseek-coder-v2-16b", "gpt-4.1", "o3-mini"]
+  
+  code_review:
+    low: ["deepseek-coder-v2-16b"]
+    medium: ["deepseek-coder-v2-16b", "gpt-4.1-mini"]
+    high: ["deepseek-coder-v2-16b", "gpt-4.1"]
+  
+  code_crit_debug:
+    low: ["deepseek-coder-v2-16b", "gpt-4.1"]
+    medium: ["deepseek-coder-v2-16b", "gpt-4.1", "o3-mini"]
+    high: ["gpt-5.1-codex-high", "o3", "o3-mini"]
+    critical: ["gpt-5.1-codex-high", "o3"]
+  
+  # Design / Reasoning
+  system_design:
+    low: ["deepseek-coder-v2-16b"]
+    medium: ["gpt-4.1"]
+    high: ["gpt-5.1-codex-high", "o3"]
+    critical: ["gpt-5.1-codex-high", "o3"]
+  
+  data_analysis:
+    low: ["deepseek-coder-v2-16b"]
+    medium: ["deepseek-coder-v2-16b", "gpt-4.1-mini"]
+    high: ["gpt-4.1"]
+  
+  research:
+    low: ["llama-3.1-8b-instruct"]
+    medium: ["gpt-4o-mini"]
+    high: ["gpt-5.1-high", "o1-pro"]
+    critical: ["gpt-5.1-high", "o3"]
+  
+  reasoning:
+    low: ["llama-3.1-8b-instruct"]
+    medium: ["gpt-4o-mini"]
+    high: ["gpt-5.1-high", "o3-mini"]
+    critical: ["gpt-5.1-high", "o3"]
+
+# ---------- CLASSIFIER SETTINGS ----------
+classifier:
+  # Use LLM-assisted classification for ambiguous prompts
+  llm_assisted: true
+  llm_model: "gpt-4.1-nano"
+  
+  # Confidence threshold below which we invoke the LLM classifier
+  heuristic_confidence_threshold: 0.7
+  
+  # Template for LLM classifier
+  prompt_template: |
+    Classify this user prompt into EXACTLY ONE task type and complexity level.
+    
+    Task types: chitchat, simple_qa, translation, summary, code_gen, code_review, code_crit_debug, system_design, data_analysis, research, reasoning
+    
+    Complexity levels: low, medium, high, critical
+    
+    Respond in this EXACT format (no markdown, no explanation):
+    TASK: <task_type>
+    COMPLEXITY: <level>
+    
+    User prompt:
+    {prompt}
+
+# ---------- SLA & FALLBACK ----------
 sla:
   enabled: true
   latency_sec: 6
   fallback_on_error: true
   retry_attempts: 2
 
-routing:
-  # Ordem de prioridade por tipo de tarefa
-  code_small: ["deepseek-coder-v2-16b", "gpt-5.1-codex-mini"]
-  code_medium: ["deepseek-coder-v2-16b", "gpt-5.1-codex-mini", "gpt-5.1-codex"]
-  code_large: ["gpt-5.1-codex", "o3-mini-high"]
-  code_critical: ["o3", "o3-mini-high"]
-  text_simple: ["llama-3.1-8b-instruct", "gpt-5-nano"]
-  text_advanced: ["llama-3.1-8b-instruct", "gpt-5-mini"]
+# ---------- BACKWARDS COMPAT (Legacy) ----------
+# These are kept for backwards compatibility but ignored by the new router
+thresholds:
+  long_tokens: 12000
+  code_simple_max_tokens: 800
+  code_medium_max_tokens: 2000
+  code_large_max_tokens: 5000
+  code_hint_regex: "(```|def |class |import )"
+  code_complex_regex: "(Traceback|stack\\s*trace|refactor|multi(-|\\s*)file|tool-?use|regex\\b|benchmark)"
+  code_critical_regex: "(deadlock|race\\s*condition|architecture|system\\s+design|critical\\s+bug|security\\s+vulnerability|memory\\s+leak|production\\s+incident|postmortem)"
+
+budget:
+  low: { prefer_cheap: true, max_cost_usd: 0.10 }
+  balanced: { prefer_cheap: true, max_cost_usd: 0.50 }
+  high: { prefer_cheap: false, max_cost_usd: 5.00 }

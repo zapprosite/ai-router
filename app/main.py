@@ -3,11 +3,60 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional, Dict, Any
-import os, time
+from contextlib import asynccontextmanager
+import os, time, json, logging
 
-from graph.router import build_compiled_router
+# ---------- Structured Logging ----------
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"}',
+    datefmt='%Y-%m-%dT%H:%M:%S'
+)
+logger = logging.getLogger("ai-router")
 
-app = FastAPI(title="AI Router (LangGraph/LangChain 1.0)", version="1.0.0")
+from graph.router import build_compiled_router, CONFIG, REG, debug_router_decision
+
+# ---------- Startup Validation (Fail Fast) ----------
+REQUIRED_MODELS = ["llama-3.1-8b-instruct", "deepseek-coder-v2-16b", "gpt-4.1-nano", "gpt-4o-mini", "gpt-4.1", "o3", "gpt-5.1-high", "gpt-5.1-codex-mini", "gpt-5.1-codex-high"]
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup/shutdown."""
+    # Startup
+    missing = [m for m in REQUIRED_MODELS if m not in REG]
+    if missing:
+        logger.critical(f"FATAL: Missing required models in config: {missing}")
+        raise RuntimeError(f"Config validation failed. Missing models: {missing}")
+    logger.info(f"Config validated. {len(REG)} models registered.")
+    yield
+    # Shutdown (cleanup if needed)
+    logger.info("Shutting down AI Router.")
+
+app = FastAPI(title="AI Router (LangGraph/LangChain 1.0)", version="1.0.0", lifespan=lifespan)
+
+# Global Exception Handler for clean 500s
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    import traceback
+    return Response(
+        content=json.dumps({
+            "error": "Internal Server Error",
+            "detail": str(exc),
+            "type": type(exc).__name__
+        }),
+        status_code=500,
+        media_type="application/json"
+    )
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ALLOW_ORIGINS", "*").split(","),
@@ -16,13 +65,14 @@ app.add_middleware(
 
 class Message(BaseModel):
     role: Literal["system","user","assistant","tool"] = "user"
-    content: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1, max_length=200000)
 
 class RouteRequest(BaseModel):
     messages: List[Message]
     latency_ms_max: Optional[int] = 0
     budget: Optional[Literal["low","balanced","high"]] = "balanced"
     prefer_code: Optional[bool] = False
+    critical: Optional[bool] = False  # NEW: Explicit flag for critical routing
 
 router_app = build_compiled_router()
 
@@ -82,6 +132,77 @@ def debug_where():
             "OPENAI_API_KEY_SET": bool(os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_TIER2")),
         },
     }
+
+# --- /debug/router_decision: introspect routing decision ---
+class DebugRouteRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, description="Sample prompt to analyze")
+
+@app.post("/debug/router_decision")
+def debug_route_decision(req: DebugRouteRequest):
+    """
+    Debug endpoint: Show what routing decision would be made for a prompt.
+    
+    Returns:
+    - routing_meta: {task, complexity, confidence, classifier_used}
+    - selected_model_id: The model that would be selected
+    - fallback_available: Whether cloud fallback is enabled
+    """
+    messages = [{"role": "user", "content": req.prompt}]
+    return debug_router_decision(messages)
+
+# --- /debug/metrics: Cost & Usage Stats ---
+@app.get("/debug/metrics")
+def get_metrics():
+    """
+    Returns aggregated metrics from the current session (or persisted logs).
+    - Total Requests
+    - Total Cost (Est)
+    - Average Latency
+    - Model Distribution
+    """
+    log_file = "logs/metrics.jsonl"
+    if not os.path.exists(log_file):
+        return {"error": "No metrics logs found yet."}
+    
+    stats = {
+        "total_requests": 0,
+        "total_cost_usd": 0.0,
+        "total_tokens": 0,
+        "latencies": [],
+        "models": {},
+        "tiers": {}
+    }
+    
+    try:
+        # Read last 1000 lines efficiently (or just all for now, assuming rotation)
+        with open(log_file, "r") as f:
+            for line in f:
+                if not line.strip(): continue
+                try:
+                    data = json.loads(line)
+                    stats["total_requests"] += 1
+                    stats["total_cost_usd"] += data.get("cost_est_usd", 0)
+                    stats["total_tokens"] += data.get("tokens_total", 0)
+                    stats["latencies"].append(data.get("latency_ms", 0))
+                    
+                    mid = data.get("model_id", "unknown")
+                    stats["models"][mid] = stats["models"].get(mid, 0) + 1
+                    
+                    tier = data.get("tier", "unknown")
+                    stats["tiers"][tier] = stats["tiers"].get(tier, 0) + 1
+                except:
+                    continue
+                    
+        # Averages
+        avg_lat = sum(stats["latencies"]) / len(stats["latencies"]) if stats["latencies"] else 0
+        stats["avg_latency_ms"] = int(avg_lat)
+        del stats["latencies"] # Keep payload clean
+        
+        stats["total_cost_usd"] = round(stats["total_cost_usd"], 6)
+        
+        return stats
+    except Exception as e:
+        return {"error": str(e)}
 
 # --- /v1/models (compat OpenAI) ---
 @app.get("/v1/models")
@@ -211,13 +332,15 @@ def route(req: RouteRequest) -> Dict[str, Any]:
         "latency_ms_max": req.latency_ms_max or 0,
         "budget": req.budget or "balanced",
         "prefer_code": bool(req.prefer_code),
+        "critical": bool(req.critical),
+        "_latency_start": t0,
     }
     try:
         out = router_app.invoke(state)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     out["usage"]["latency_ms_router"] = int((time.perf_counter() - t0) * 1000)
-    print({"evt":"route_done","model":out["usage"]["resolved_model_id"],"lat_ms":out["usage"]["latency_ms_router"]})
+    logger.info(json.dumps({"evt":"route_done","model":out["usage"]["resolved_model_id"],"lat_ms":out["usage"]["latency_ms_router"],"critical":state["critical"]}))
     return out
 
 

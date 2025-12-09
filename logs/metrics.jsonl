@@ -1,0 +1,1 @@
+{"ts": "2025-12-09T00:44:39.743020", "prompt_id": "fd50101c-991a-4ab4-a74e-1431865dd8e5", "task": "code_crit_debug", "complexity": "critical", "model_id": "gpt-5.1-codex-high", "tier": "standard", "tokens_total": 327, "latency_ms": 0, "cost_est_usd": 0.001635, "status": "success"}

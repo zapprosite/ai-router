@@ -1,89 +1,59 @@
-# Arquitetura
+# System Architecture
 
-Componentes principais e fluxo de decisão. Minimalista, porém robusto.
+The AI Router acts as an intelligent gateway, sitting between your applications and various AI models. It makes real-time decisions to optimize for cost, quality, and speed.
 
-> Diagramas Mermaid abaixo: compatível com renderização no GitHub.
-
-## Componentes
-
-- `app/` (FastAPI)
-  - `GET/HEAD /healthz` — saúde do serviço.
-  - `GET /debug/where` — módulos carregados, env ativo e caminhos.
-  - `GET /v1/models` — compat OpenAI; IDs do registro de modelos.
-  - `POST /route` — roteamento inteligente (Llama ↔ DeepSeek ↔ OpenAI fallback).
-- `graph/router.py` — regras LCEL (`RunnableBranch`) em LangChain 1.0/LangGraph 1.0.
-- `providers/`
-  - `ollama_client.py` — cliente local (ChatOllama, `/api/chat`).
-  - `openai_client.py` — fallback Tier‑2 (gpt‑5‑nano/mini/codex/gpt‑5).
-- `config/`
-  - `.env.local` — variáveis de ambiente (NÃO versionar).
-  - `router_config.yaml` — registro de modelos (IDs e nomes reais).
-  - `router_policy.yaml` — política de roteamento (heurísticas/SLA).
-- `public/Guide.html` — painel web em `/guide` (auto‑sync com `/public/guide_cmds.json`).
-
-Portas
-- Produção (systemd): `8082`.
-- Desenvolvimento (`make run-dev`): `8083` (sem conflitar com 8082).
-
-## Fluxo (alto nível)
+## High-Level Data Flow
 
 ```mermaid
-flowchart LR
-    A[Client] --> B[FastAPI 8082]
-    B --> C[Router<br/>LCEL / LangGraph]
-    C -->|código / prefer_code| D[DeepSeek Coder v2 16B (Ollama)]
-    C -->|texto curto / explicação| E[Llama 3.1 8B Instruct (Ollama)]
-    C -->|SLA violado ou falha<br/>+ fallback ON| F[(OpenAI Tier‑2)]
-    D --> G[(Resposta)]
-    E --> G
-    F --> G
-```
-
-Pré‑requisitos: Ollama em `http://localhost:11434` com os modelos já baixados (`ollama pull`).
-
-## Árvore de decisão (resumo)
-
-```mermaid
-stateDiagram-v2
-    [*] --> Decide
-    Decide --> DeepSeek: prefer_code == true
-    Decide --> DeepSeek: detecta código / traceback
-    Decide --> Llama: texto curto / explicação
-    DeepSeek --> SLA: executa local
-    Llama --> SLA: executa local
-    SLA --> OpenAI: p95 > sla.latency_sec AND fallback ON
-    SLA --> [*]: sucesso local
-```
-
-## Sequência de chamada
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant FE as Client/Frontend
-    participant API as FastAPI 8082
-    participant R as Router (LCEL/LangGraph)
-    participant L8 as Llama 3.1 8B (Ollama)
-    participant DS as DeepSeek Coder v2 16B (Ollama)
-    participant OAI as OpenAI (Tier‑2)
-    FE->>API: POST /route {messages, prefer_code, budget}
-    API->>R: invoke(state)
-    alt prefer code ou código detectado
-        R->>DS: messages
-        DS-->>R: output
-    else texto curto/explicação
-        R->>L8: messages
-        L8-->>R: output
+graph TD
+    User[User / App] -->|Request| API[AI Router API :8087]
+    
+    subgraph "Decision Engine"
+        API --> Class[Classifier (Heuristic/LLM)]
+        Class -->|Simple Task| LocalRoute
+        Class -->|Complex Task| CloudRoute
+        Class -->|Critical Code| EliteRoute
     end
-    opt SLA violado ou erro (fallback ON)
-        R->>OAI: messages (nano/mini/codex/gpt‑5)
-        OAI-->>R: output
+    
+    subgraph "Tier 1: Local (Free)"
+        LocalRoute --> Llama[Llama 3.1 8B]
+        LocalRoute --> Deep[DeepSeek Coder]
     end
-    R-->>API: {output, usage{...}}
-    API-->>FE: 200 {output, usage}
+    
+    subgraph "Tier 3: Cloud Balanced"
+        CloudRoute --> GPT4[GPT-4.1 / 4o-mini]
+    end
+    
+    subgraph "Tier 5: Elite (2025)"
+        EliteRoute --> GPT5[GPT-5.1 Codex]
+        EliteRoute --> O3[O3 Reasoning]
+    end
+    
+    Llama -->|Response| API
+    Deep -->|Response| API
+    GPT4 -->|Response| API
+    GPT5 -->|Response| API
 ```
 
-Observações
-- O roteamento é local‑first por padrão; a nuvem é estritamente fallback.
-- O painel (`/guide`) permite smokes e testes rápidos sem alterar a lógica.
-- Não altere portas, unidades systemd, docker ou segredos via documentação.
+## Core Components
+
+### 1. The Classifier
+The router analyzes every incoming prompt. It looks for:
+- **Keywords**: "traceback", "system design", "write code".
+- **Complexity**: Length of input, number of turns.
+- **Intent**: Is this a casual chat or a production outage?
+
+### 2. The Routing Policy (`router_config.yaml`)
+Defined rules that determine where a prompt goes based on its classification.
+- **Low Complexity** -> Tier 1 (Local)
+- **Medium Complexity** -> Tier 3 (Cloud Balanced)
+- **High/Critical** -> Tier 5 (Elite)
+
+### 3. Stability Layer
+If a requested model (e.g., `gpt-5.1-codex`) is temporarily unavailable or if the API key lacks access, the Stability Layer transparently re-routes the request to the nearest equivalent (e.g., `gpt-4.1`). This ensures 100% uptime.
+
+### 4. Observability Layer
+The router provides deep visibility into usage and costs:
+- **Metrics Endpoint**: `/debug/metrics` provides real-time JSON stats (latency, cost, tokens).
+- **Structured Logs**: Requests are logged to `logs/metrics.jsonl` with a unique `prompt_id`.
+- **Cost Guard**: Estimates cost *before* execution and blocks queries that exceed the budget.
