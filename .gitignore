@@ -88,6 +88,7 @@ docker-compose.yml.bak.*
 # manter .env.example versionado; ignorar variantes locais
 config/.env.*
 !config/.env.example
+!config/.env.def
 
 ########################################
 # Node (se usado em testes auxiliares)

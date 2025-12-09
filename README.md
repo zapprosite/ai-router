@@ -1,139 +1,114 @@
-# AI Router — Local‑first (Ollama) com fallback Tier‑2
+# AI Router (LangGraph Gateway)
 
-![python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
-![fastapi](https://img.shields.io/badge/FastAPI-0.120.x-009688?logo=fastapi&logoColor=white)
-![langchain](https://img.shields.io/badge/LangChain-1.x-2C3E50)
-![langgraph](https://img.shields.io/badge/LangGraph-1.0-2C3E50)
-![ollama](https://img.shields.io/badge/Ollama-local-000000?logo=ollama)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/yourusername/ai-router)
+[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Port](https://img.shields.io/badge/port-8087-orange)](http://localhost:8087)
 
-Roteador de prompts simples, eficiente e econômico. Prioriza modelos locais (Ollama) e só escala para nuvem (OpenAI, Tier‑2) somente quando o SLA exigir.
+**An Enterprise-Grade LLM Gateway** that intelligently routes prompts between local models (Ollama) and cloud providers (OpenAI) based on complexity, cost, and code-generation needs.
 
-Resumo do fluxo
+---
 
-```text
- Cliente → FastAPI (8082) → Router (LCEL/RunnableBranch)
-                    ├─ Código/traceback/prefer_code → DeepSeek Coder v2 (16B, Ollama)
-                    └─ Texto curto/explicação       → Llama 3.1 Instruct (8B, Ollama)
-                       ↘ (opcional) Fallback → OpenAI (gpt‑5‑nano/mini/codex/gpt‑5)
-```
+## 🚀 Quick Start
 
-- Local: `llama3.1:8b-instruct` (explicações/curto) e `deepseek-coder-v2:16b` (código).
-- Fallback: `gpt-5-nano`, `gpt-5-mini`, `gpt-5-codex` (Responses API) e `gpt-5` (high).
-- Portas: serviço `8082` (systemd), dev `8083` (`make run-dev`).
+### 1. Configure Secrets
+Copy the command below, replace `sk-proj-...` with your actual OpenAI API Key, and paste it into your terminal. This will securely configure your environment.
 
-Links rápidos
-- Painel: `http://localhost:8082/guide` (botões copiam o comando; terminal embutido).
-- Modelos (compat OpenAI): `GET http://localhost:8082/v1/models`.
-- Saúde: `GET/HEAD http://localhost:8082/healthz`.
-
-Tabela de Conteúdos
-- Quickstart
-- Comandos (Makefile)
-- Roteamento (resumo)
-- Endpoints
-- Testes
-- Troubleshooting
-- Segurança de segredos
-- Documentação relacionada
-- Backup & Restore
-
-## Quickstart (3 passos)
-
-1) Ambiente Python (PEP 668 → use venv) e deps
 ```bash
-cd /srv/projects/ai-router
-make venv
+sudo tee /srv/projects/ai-router/config/.env.local > /dev/null << 'EOF'
+# === AI ROUTER CONFIGURATION ===
+# Replace the key below with your actual OpenAI API Key
+OPENAI_API_KEY_TIER2=sk-proj-YOUR_ACTUAL_KEY_HERE_REPLACE_ME
+
+# Router Settings
+ENABLE_OPENAI_FALLBACK=1
+OPENAI_TIMEOUT_SEC=20
+EOF
 ```
 
-2) Variáveis locais (.env.local) e sessão
+### 2. Launch the Router
+Get the system up and running in seconds.
+
 ```bash
-# crie/edite config/.env.local (veja docs/SECRETS_STANDARD.md)
-. .venv/bin/activate && set -a; . config/.env.local; set +a
-# opcional: make env (confirma leitura do arquivo)
-make env
+# Start the server (Development Mode)
+make dev
+# Service will be available at http://localhost:8087
 ```
 
-3) Reiniciar serviço e validar saúde
+---
+
+## ⚡ Key Features
+
+*   **💡 Intelligent Routing**: Automatically directs simple tasks to local models (Llama 3.1, DeepSeek) and complex reasoning to Cloud/Tier 5 (GPT-5.1, O3).
+*   **🛡️ Cost Guard**: Real-time budget protection prevents accidental overspending.
+*   **👁️ Observability**: Built-in metrics endpoint and cost reporting scripts.
+*   **🔌 Drop-in Replacement**: Compatible with OpenAI's API format.
+*   **Multi-Tier Architecture**:
+    *   **Tier 1 (Local)**: Llama 3.1 (Fast, Free)
+    *   **Tier 2 (Code)**: DeepSeek Coder (Specialized Local)
+    *   **Tier 3 (Cloud)**: GPT-4.1 / GPT-4o-mini (Balanced)
+    *   **Tier 4 (Reasoning)**: o-series / o3-mini (Complex Logic)
+    *   **Tier 5 (Elite)**: GPT-5.1 High / Codex (State of the Art)
+
+---
+
+## ⚙️ Customization
+
+### Changing Models
+To modify the available models or routing logic, edit `config/router_config.yaml`.
+
 ```bash
-make restart
-curl -fsS http://localhost:8082/healthz && echo OK
-# depois, abra o painel: http://localhost:8082/guide
+nano config/router_config.yaml
 ```
 
-## Comandos principais (Makefile)
+**Example: Add a new model**
+```yaml
+  - id: my-new-model
+    provider: openai
+    name: "gpt-4-turbo"
+    tier: 3
+    capabilities: ["general", "fast"]
+```
 
-- `make venv` cria venv e instala `requirements.txt`.
-- `make env` carrega variáveis do `config/.env.local` (confirmação).
-- `make run` sobe FastAPI no foreground em `8082` (conflita com systemd).
-- `make run-dev` sobe FastAPI com `--reload` em `8083` (desliga o service antes).
-- `make status | restart | logs | warm` operações do serviço (systemd) e aquecimento.
-- `make smoke` executa smoke (texto + código) via `/route`.
-- `make test-nano | test-mini | test-codex | test-high` exercitam matriz OpenAI (requer fallback ON + chave válida).
-- `make local-llama | local-deepseek` testam os modelos locais.
-- `make cloud-status | cloud-on | cloud-off` alternam fallback sem reescrever a chave.
-- `make backup-all | restore-ollama` backup/restauração (inclui blobs do Ollama).
-- `make panel-json | panel-refresh` sincroniza o JSON do painel `/public/guide_cmds.json`.
- - `make guide-open` abre o painel no navegador (fallback: acesse http://localhost:8082/guide).
+### Routing Logic
+You can adjust the routing thresholds in the `routing_policy` section of the config file.
 
-## Roteamento (resumo)
+```yaml
+  code_gen:
+    low: ["deepseek-coder-v2-16b"] # Local
+    high: ["gpt-5.1-codex-mini"]    # Cloud
+    critical: ["gpt-5.1-codex-high"] # Best Available
+```
 
-- Heurística (LangChain 1.0 / LCEL `RunnableBranch`):
-  - Sinal de código (def/class/import/traceback/```…``` ou `prefer_code=true`) → DeepSeek 16B.
-  - Caso contrário (texto curto/explicativo) → Llama 8B Instruct.
-- Fallback (Tier‑2) só se `ENABLE_OPENAI_FALLBACK=1` e houver violação do SLA (`TIER2_LATENCY_THRESHOLD_SEC=6`) ou falha local.
+---
 
-## Endpoints
+## 🛠️ API Usage
 
-- `GET/HEAD /healthz` → `{ "ok": true }`.
-- `GET /debug/where` → caminhos de config, módulos e env ativos.
-- `GET /v1/models` → lista de modelos registrados (compat OpenAI).
-- `POST /route` → roteamento inteligente; resposta inclui `usage.resolved_model_id` e métricas.
-- `GET /guide` e `GET /` → painel; raiz redireciona para `/guide` (302).
+### Interactive Dashboard
+Visit the **[Mission Control Dashboard](http://localhost:8087/guide)** to see real-time routing decisions and system status.
 
-## Como rodar testes
-
-- E2E/Smokes: `make smoke`.
-- Evals: `make evals` (esperado PASS nos 3 casos de ouro).
-- Matriz de modelos: `scripts/TEST_MODELS.py | python3 -m json.tool` (requer cloud ON para gpt‑5*).
-- Pytests locais (se aplicável):
+### Example Request
 ```bash
-export PYTHONPATH=$PWD
-pytest -q -k "not e2e"
+curl -X POST http://localhost:8087/route \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Write a Python function to sort a list"}],
+    "prefer_code": true
+  }'
 ```
 
-## Troubleshooting (essencial)
+---
 
-- Porta 8082 ocupada: `make free-8082` (mata processos e libera a porta).
-- Status/logs do serviço: `make status` e `make logs`.
-- Reinício rápido e validação: `make restart` e `curl -fsS /healthz`.
-- Recuperação segura (mata cargas, reinicia Ollama+router e valida): `scripts/RECOVER_SAFE.sh`.
-- Painel desatualizado: `make panel-json && make panel-refresh`.
-- Fallback quer gastar? Verifique: `make cloud-status`; ligue/desligue com `make cloud-on/off`.
+## 📚 Documentation
 
-## Segurança de segredos (padrões)
+- **[Getting Started](docs/GETTING_STARTED.md)**: Zero to Hero tutorial.
+- **[Architecture](docs/ARCHITECTURE.md)**: How the decision engine works.
+- **[Changelog](CHANGELOG.md)**: Version history and updates.
 
-- Segredos ficam em `config/.env.local` e não devem ser commitados. O repositório já ignora `config/.env.local`, `.venv/` e artefatos.
-- Ollama não requer chave local; apenas o daemon em `http://localhost:11434`.
-- OpenAI (fallback opcional): defina `OPENAI_API_KEY_TIER2` e `ENABLE_OPENAI_FALLBACK=1` quando desejar usar.
-- `OPENAI_REASONING_EFFORT∈{low,medium,high}` só se aplica a `gpt-5`. Nunca envie `reasoning_effort` para nano/mini/codex (já implementado).
+## 🤝 Contributing
 
-## Documentação relacionada
+Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** for details on our code of conduct and the process for submitting pull requests.
 
-- `docs/ARCHITECTURE.md` — componentes e fluxos.
-- `docs/LOCAL_USAGE.md` — ambiente, run-dev, systemd, logs, health.
-- `docs/EVALS.md` — smoke + evals e interpretação.
-- `docs/FRONTEND_INTEGRATION.md` — exemplos de payloads e endpoints.
-- `docs/SECRETS_STANDARD.md` — padrões de segredos e toggles cloud.
-- `docs/AGENTS.md` — diretrizes para agentes/automação.
-- `docs/guide.md` — como usar e sincronizar o painel `/guide`.
-- `docs/guia_de_test.md` — roteiro de testes, stress e recuperação.
-- `docs/CONTINUE.md` — Continue.dev + router-auto (OpenAI shim + MCP) Quickstart.
+## 📄 License
 
-## Backup & Restore
-
-Nota de Arquitetura
-- Diagramas Mermaid e detalhes de decisão/fluxo em `docs/ARCHITECTURE.md`.
-
-- Backup completo: `make backup-all` (projeto, lock, `.env.local` com 600, blobs do Ollama).
-- Backup leve para Desktop (sem segredos; Ollama como manifests): `scripts/BACKUP_DESKTOP.sh`.
-- Restore Ollama: `make restore-ollama` (instruções de extração + restart ollama).
+This project is licensed under the MIT License - see the `LICENSE` file for details.

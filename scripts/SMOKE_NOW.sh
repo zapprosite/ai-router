@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-BASE="${BASE:-http://localhost:8082}"
+BASE="${BASE:-http://localhost:8087}"
 
 echo "[1/3] texto curto"
 curl -sS -X POST "$BASE/route" -H 'content-type: application/json' \

@@ -17,10 +17,10 @@ help:
 	@echo "== AI Router — Atalhos =="
 	@echo "  make venv           # cria venv e instala requirements.txt   #comentario_tutor: 1a vez / atualizar deps"
 	@echo "  make env            # carrega ENV desta sessão               #comentario_tutor: não afeta outras shells"
-	@echo "  make run            # sobe FastAPI (foreground em 8082)      #comentario_tutor: CONFLITA se service ativo"
-	@echo "  make run-dev        # sobe FastAPI (reload) em 8083          #comentario_tutor: ideal p/ debug, sem conflito"
-	@echo "  make stop           # para o service systemd                 #comentario_tutor: libera 8082"
-	@echo "  make free-8082      # força liberar porta 8082               #comentario_tutor: usa fuser/pkill"
+	@echo "  make run            # sobe FastAPI (foreground em 8087)      #comentario_tutor: CONFLITA se service ativo"
+	@echo "  make run-dev        # sobe FastAPI (reload) em 8087          #comentario_tutor: UNIFICADO (ideal p/ debug)"
+	@echo "  make stop           # para o service systemd                 #comentario_tutor: libera 8087"
+	@echo "  make free-8087      # força liberar porta 8087               #comentario_tutor: usa fuser/pkill"
 	@echo "  make status         # status systemd                          #comentario_tutor: ver se está 'active (running)'"
 	@echo "  make restart        # restart + healthz                       #comentario_tutor: reinicia serviço web"
 	@echo "  make logs           # últimos logs                            #comentario_tutor: tail curto no journal"
@@ -48,26 +48,31 @@ env:
 	@set -a; . $(ENVF); set +a; echo "OK: env carregado de $(ENVF)"
 
 .PHONY: run
-run: env
-	@. $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8082
+run:
+	@set -a; . $(ENVF); set +a; . $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8087
 
 .PHONY: run-dev
-run-dev: env
-	@echo "#comentario_tutor: parando service para evitar conflito (se estiver ativo)"
-	@-$(SUDO) systemctl stop $(SERVICE) 2>/dev/null || true
-	@echo "#comentario_tutor: iniciando Uvicorn com --reload em 8083"
-	@. $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8083 --reload
+run-dev:
+	@echo "#comentario_tutor: iniciando Uvicorn com --reload em 8087 (Unificado)"
+	@set -a; . $(ENVF); set +a; . $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8087 --reload
+
+.PHONY: pre-flight
+pre-flight:
+	@./scripts/PRE_FLIGHT_CHECK.sh
+
+.PHONY: dev
+dev: pre-flight run-dev
 
 .PHONY: stop
 stop:
 	@$(SUDO) systemctl stop $(SERVICE) || true
 	@echo "service parado"
 
-.PHONY: free-8082
-free-8082:
-	@fuser -k 8082/tcp || true
-	@pkill -f "uvicorn app.main:app.*8082" || true
-	@echo "porta 8082 livre"
+.PHONY: free-8087
+free-8087:
+	@fuser -k 8087/tcp || true
+	@pkill -f "uvicorn app.main:app.*8087" || true
+	@echo "porta 8087 livre"
 
 .PHONY: status
 status:
@@ -76,7 +81,7 @@ status:
 .PHONY: restart
 restart:
 	@$(SUDO) systemctl restart $(SERVICE)
-	@sleep 1; curl -fsS http://localhost:8082/healthz && echo "healthz OK" || (echo "healthz FAIL" && exit 1)
+	@sleep 1; curl -fsS http://localhost:8087/healthz && echo "healthz OK" || (echo "healthz FAIL" && exit 1)
 
 .PHONY: logs
 logs:
@@ -87,7 +92,7 @@ warm:
 	@$(SUDO) systemctl start $(WARM_SERVICE).service || true
 
 define _CURL
-curl -s http://localhost:8082/route -H 'content-type: application/json' -d
+curl -s http://localhost:8087/route -H 'content-type: application/json' -d
 endef
 
 .PHONY: smoke
@@ -96,27 +101,27 @@ smoke:
 
 .PHONY: test-nano
 test-nano:
-	@curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-nano"}' | python3 -m json.tool | sed -n '1,24p'
+	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-nano"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: test-mini
 test-mini:
-	@curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-mini"}' | python3 -m json.tool | sed -n '1,24p'
+	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-mini"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: test-codex
 test-codex:
-	@curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-codex"}' | python3 -m json.tool | sed -n '1,40p'
+	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-codex"}' | python3 -m json.tool | sed -n '1,40p'
 
 .PHONY: test-high
 test-high:
-	@curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5"}' | python3 -m json.tool | sed -n '1,24p'
+	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: local-llama
 local-llama:
-	@curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -d '{"model":"llama3.1:8b-instruct-q5_K_M"}' | python3 -m json.tool | sed -n '1,24p'
+	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"llama3.1:8b-instruct-q5_K_M"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: local-deepseek
 local-deepseek:
-	@curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -d '{"model":"deepseek-coder-v2:16b"}' | python3 -m json.tool | sed -n '1,24p'
+	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"deepseek-coder-v2:16b"}' | python3 -m json.tool | sed -n '1,24p'
 
 # ==== Cloud toggle sem reescrever segredos ====
 define SET_ENV_KEY
@@ -142,14 +147,14 @@ cloud-on:
 	@$(call SET_ENV_KEY,ENABLE_OPENAI_FALLBACK,1)
 	@echo "#comentario_tutor: fallback ligado (usa a chave já presente em $(ENVF))"
 	@$(SUDO) systemctl restart $(SERVICE)
-	@sleep 1; curl -fsS http://localhost:8082/healthz && echo "healthz OK"
+	@sleep 1; curl -fsS http://localhost:8087/healthz && echo "healthz OK"
 
 .PHONY: cloud-off
 cloud-off:
 	@$(call SET_ENV_KEY,ENABLE_OPENAI_FALLBACK,0)
 	@echo "#comentario_tutor: fallback desligado (custo zero; mantém a chave no arquivo)"
 	@$(SUDO) systemctl restart $(SERVICE)
-	@sleep 1; curl -fsS http://localhost:8082/healthz && echo "healthz OK"
+	@sleep 1; curl -fsS http://localhost:8087/healthz && echo "healthz OK"
 
 # ==== Backup & Restore ====
 .PHONY: backup-all
@@ -202,7 +207,7 @@ panel-json:
 
 .PHONY: panel-refresh
 panel-refresh: panel-json
-	@curl -fsS http://localhost:8082/public/guide_cmds.json | jq length
+	@curl -fsS http://localhost:8087/public/guide_cmds.json | jq length
 	@echo "OK: painel atualizado"
 
 # Sanity checks for Makefile formatting (tabs, LF)
@@ -218,16 +223,16 @@ check-tabs:
 ## data-cmd: make run-dev
 ## data-cmd: make smoke
 ## data-cmd: make evals
-## data-cmd: curl -fsS http://localhost:8082/healthz
-## data-cmd: curl -fsS http://localhost:8082/v1/models | jq '.data[].id'
-## data-cmd: curl -s http://localhost:8082/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Explique HVAC em 1 frase."}]}' | python3 -m json.tool | sed -n '1,24p'
-## data-cmd: curl -s http://localhost:8082/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Escreva uma função Python soma(n1,n2) com docstring."}],"prefer_code":true}' | python3 -m json.tool | sed -n '1,24p'
+## data-cmd: curl -fsS http://localhost:8087/healthz
+## data-cmd: curl -fsS http://localhost:8087/v1/models | jq '.data[].id'
+## data-cmd: curl -s http://localhost:8087/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Explique HVAC em 1 frase."}]}' | python3 -m json.tool | sed -n '1,24p'
+## data-cmd: curl -s http://localhost:8087/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Escreva uma função Python soma(n1,n2) com docstring."}],"prefer_code":true}' | python3 -m json.tool | sed -n '1,24p'
 ## data-cmd: scripts/LATENCY_PROBE.sh
 ## data-cmd: scripts/RUN_AUDIT_AND_TESTS.sh
 
 .PHONY: guide-open
 guide-open:
-	@xdg-open http://localhost:8082/guide >/dev/null 2>&1 || echo "Abra: http://localhost:8082/guide"
+	@xdg-open http://localhost:8087/guide >/dev/null 2>&1 || echo "Abra: http://localhost:8087/guide"
 
 .PHONY: docs-rewrite
 docs-rewrite:
@@ -254,9 +259,9 @@ docs-verify:
 test-continue:
 	@. $(VENV)/bin/activate && PYTHONPATH=$(PWD) python -m pytest -q tests/test_chat_completions.py
 
-.PHONY: kill-8082
-kill-8082:
-	@p=$$(ss -ltnp 2>/dev/null | awk '/:8082 /{print $$7}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p'); \
+.PHONY: kill-8087
+kill-8087:
+	@p=$$(ss -ltnp 2>/dev/null | awk '/:8087 /{print $$7}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p'); \
 	[ -z "$$p" ] || (echo "Killing $$p" && kill -9 $$p) || true
 
 .PHONY: check-continue-config
