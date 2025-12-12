@@ -12,6 +12,7 @@ sys.path.insert(0, os.getcwd())
 # Mock Response for network failures
 os.environ["OPENAI_API_KEY"] = "sk-chaos-test"
 os.environ["ENABLE_OPENAI_FALLBACK"] = "1"
+os.environ["AI_ROUTER_API_KEY"] = "test_secret_key_12345"
 
 from app.main import app
 
@@ -48,7 +49,8 @@ async def test_cloud_provider_down_fallback():
     # Patch the `invoke` method of ChatOpenAI? Or the runnable?
     with patch("langchain_openai.chat_models.base.ChatOpenAI.invoke", side_effect=Exception("OpenAI Down")):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post("/route", json={"messages": [{"role": "user", "content": prompt}]})
+            headers = {"X-API-Key": "test_secret_key_12345"}
+            resp = await client.post("/route", json={"messages": [{"role": "user", "content": prompt}]}, headers=headers)
             
             # Should not be 500 Internal Server Error
             # Ideally 200 with fallback response OR 424 Failed Dependency

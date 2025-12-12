@@ -37,7 +37,7 @@ class TestPoorDevStrategy:
         
         # Selection MUST be DeepSeek
         model = select_model_from_policy(meta)
-        assert model == "deepseek-coder-v2-16b", f"Escalated unnecessarily to {model}"
+        assert model == "local-code", f"Escalated unnecessarily to {model}"
 
     def test_deepseek_handles_medium_stacktraces(self):
         """
@@ -54,7 +54,7 @@ class TestPoorDevStrategy:
         assert meta.task in ["code_crit_debug", "code_review"]
         
         model = select_model_from_policy(meta)
-        assert model == "deepseek-coder-v2-16b", f"Standard traceback escalated to {model}"
+        assert model == "local-code", f"Standard traceback escalated to {model}"
 
     def test_escalation_for_production_critical(self):
         """

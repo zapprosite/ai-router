@@ -1,5 +1,9 @@
 import json
+import os
 from fastapi.testclient import TestClient
+
+# Set test API key
+os.environ["AI_ROUTER_API_KEY"] = "test_secret_key_12345"
 
 
 def test_chat_completions_openai_shim(monkeypatch):
@@ -21,7 +25,7 @@ def test_chat_completions_openai_shim(monkeypatch):
         "model": "router-auto",
         "messages": [{"role": "user", "content": "test"}],
     }
-    resp = client.post("/v1/chat/completions", json=payload)
+    resp = client.post("/v1/chat/completions", json=payload, headers={"X-API-Key": "test_secret_key_12345"})
     assert resp.status_code == 200
     data = resp.json()
 
@@ -38,7 +42,7 @@ def test_chat_completions_openai_shim(monkeypatch):
 def test_models_includes_router_auto():
     from app import main as m
     client = TestClient(m.app)
-    resp = client.get("/v1/models")
+    resp = client.get("/v1/models", headers={"X-API-Key": "test_secret_key_12345"})
     assert resp.status_code == 200
     data = resp.json()
     ids = [d.get("id") for d in data.get("data", [])]
