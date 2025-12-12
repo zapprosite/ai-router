@@ -109,13 +109,13 @@ class TestPolicyBasedRouting:
         """Chitchat should route to local models (Tier 1)."""
         meta = RoutingMeta(task="chitchat", complexity="low")
         model = select_model_from_policy(meta)
-        assert model == "llama-3.1-8b-instruct", f"Got: {model}"
+        assert model == "local-chat", f"Got: {model}"
     
     def test_code_gen_routes_to_deepseek(self):
         """Code generation should route to DeepSeek (Tier 2)."""
         meta = RoutingMeta(task="code_gen", complexity="medium")
         model = select_model_from_policy(meta)
-        assert model in ["deepseek-coder-v2-16b", "gpt-5.1-codex-mini"], f"Got: {model}"
+        assert model in ["local-code", "gpt-5.1-codex-mini"], f"Got: {model}"
     
     def test_critical_routes_to_cloud(self):
         """Critical tasks should route to cloud reasoning models."""
@@ -138,13 +138,13 @@ class TestEndToEndRouting:
         """'Hi' should route to local fast model."""
         meta = classify_prompt([{"role": "user", "content": "Hi"}])
         model = select_model_from_policy(meta)
-        assert model == "llama-3.1-8b-instruct"
+        assert model == "local-chat"
     
     def test_e2e_code_request(self):
         """Code requests should route to code-capable models."""
         meta = classify_prompt([{"role": "user", "content": "Write a Python function for quicksort"}])
         model = select_model_from_policy(meta)
-        assert model in ["deepseek-coder-v2-16b", "gpt-5.1-codex-mini", "gpt-5.1-codex"]
+        assert model in ["local-code", "gpt-5.1-codex-mini", "gpt-5.1-codex"]
     
     def test_e2e_deadlock_analysis(self):
         """Deadlock analysis should route to premium cloud."""
@@ -195,12 +195,12 @@ def run_eval():
     
     test_cases = [
         # (prompt, expected_tier_or_model)
-        ("Hi", "llama-3.1-8b-instruct"),
-        ("What is the capital of France?", "llama-3.1-8b-instruct"),
-        ("Write a Python function to sort a list", "deepseek-coder-v2-16b"),
+        ("Hi", "local-chat"),
+        ("What is the capital of France?", "local-chat"),
+        ("Write a Python function to sort a list", "local-code"),
         ("Analyze this deadlock in production", "o3"),
         ("Design a distributed system architecture", "o3"),
-        ("Traceback (most recent call last):", "deepseek-coder-v2-16b"),
+        ("Traceback (most recent call last):", "local-code"),
         ("Security vulnerability in authentication", "o3"),
         ("Race condition in payment processing", "o3"),
     ]
@@ -216,7 +216,7 @@ def run_eval():
         is_pass = (model == expected) or (
             expected in ["o3", "gpt-5.1-codex"] and model in ["o3", "o3-mini-high", "gpt-5.1-codex"]
         ) or (
-            expected == "deepseek-coder-v2-16b" and model in ["deepseek-coder-v2-16b", "gpt-5.1-codex-mini"]
+            expected == "local-code" and model in ["local-code", "gpt-5.1-codex-mini"]
         )
         
         status = "✅" if is_pass else "❌"

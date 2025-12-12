@@ -3,14 +3,14 @@
 
 models:
   # === TIER 1: LOCAL FAST (Ollama) ===
-  - id: llama-3.1-8b-instruct
+  - id: local-chat
     provider: ollama
-    name: "llama3.1:8b-instruct-q5_K_M"
+    name: "hermes3:8b"
     base_url: "http://localhost:11434"
     tier: 1
-    capabilities: ["chitchat", "translation", "summary", "simple_qa"]
+    capabilities: ["chitchat", "translation", "summary", "simple_qa", "fast"]
 
-  - id: deepseek-coder-v2-16b
+  - id: local-code
     provider: ollama
     name: "deepseek-coder-v2:16b"
     base_url: "http://localhost:11434"
@@ -169,59 +169,59 @@ complexity_signals:
 routing_policy:
   # Chitchat / Simple
   chitchat:
-    low: ["llama-3.1-8b-instruct"]
-    medium: ["llama-3.1-8b-instruct", "gpt-4o-mini"]
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-4o-mini"]
   
   simple_qa:
-    low: ["llama-3.1-8b-instruct"]
-    medium: ["llama-3.1-8b-instruct", "gpt-4o-mini"]
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-4o-mini"]
   
   translation:
-    low: ["llama-3.1-8b-instruct"]
-    medium: ["llama-3.1-8b-instruct", "gpt-4o-mini"]
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-4o-mini"]
   
   summary:
-    low: ["llama-3.1-8b-instruct"]
-    medium: ["llama-3.1-8b-instruct"]
+    low: ["local-chat"]
+    medium: ["local-chat"]
     high: ["gpt-4o-mini", "gpt-4.1"]
   
   # Code Tasks
   code_gen:
-    low: ["deepseek-coder-v2-16b"]
-    medium: ["deepseek-coder-v2-16b", "gpt-4.1-mini"]
-    high: ["deepseek-coder-v2-16b", "gpt-4.1", "o3-mini"]
+    low: ["local-code"]
+    medium: ["local-code", "gpt-4.1-mini"]
+    high: ["local-code", "gpt-4.1", "o3-mini"]
   
   code_review:
-    low: ["deepseek-coder-v2-16b"]
-    medium: ["deepseek-coder-v2-16b", "gpt-4.1-mini"]
-    high: ["deepseek-coder-v2-16b", "gpt-4.1"]
+    low: ["local-code"]
+    medium: ["local-code", "gpt-4.1-mini"]
+    high: ["local-code", "gpt-4.1"]
   
   code_crit_debug:
-    low: ["deepseek-coder-v2-16b", "gpt-4.1"]
-    medium: ["deepseek-coder-v2-16b", "gpt-4.1", "o3-mini"]
+    low: ["local-code", "gpt-4.1"]
+    medium: ["local-code", "gpt-4.1", "o3-mini"]
     high: ["gpt-5.1-codex-high", "o3", "o3-mini"]
     critical: ["gpt-5.1-codex-high", "o3"]
   
   # Design / Reasoning
   system_design:
-    low: ["deepseek-coder-v2-16b"]
+    low: ["local-code"]
     medium: ["gpt-4.1"]
     high: ["gpt-5.1-codex-high", "o3"]
     critical: ["gpt-5.1-codex-high", "o3"]
   
   data_analysis:
-    low: ["deepseek-coder-v2-16b"]
-    medium: ["deepseek-coder-v2-16b", "gpt-4.1-mini"]
+    low: ["local-code"]
+    medium: ["local-code", "gpt-4.1-mini"]
     high: ["gpt-4.1"]
   
   research:
-    low: ["llama-3.1-8b-instruct"]
+    low: ["local-chat"]
     medium: ["gpt-4o-mini"]
     high: ["gpt-5.1-high", "o1-pro"]
     critical: ["gpt-5.1-high", "o3"]
   
   reasoning:
-    low: ["llama-3.1-8b-instruct"]
+    low: ["local-chat"]
     medium: ["gpt-4o-mini"]
     high: ["gpt-5.1-high", "o3-mini"]
     critical: ["gpt-5.1-high", "o3"]

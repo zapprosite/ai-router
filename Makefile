@@ -92,7 +92,7 @@ warm:
 	@$(SUDO) systemctl start $(WARM_SERVICE).service || true
 
 define _CURL
-curl -s http://localhost:8087/route -H 'content-type: application/json' -d
+source $(ENVF) && curl -s http://localhost:8087/route -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d
 endef
 
 .PHONY: smoke
@@ -101,27 +101,27 @@ smoke:
 
 .PHONY: test-nano
 test-nano:
-	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-nano"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-4.1-nano"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: test-mini
 test-mini:
-	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-mini"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-4o-mini"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: test-codex
 test-codex:
-	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5-codex"}' | python3 -m json.tool | sed -n '1,40p'
+	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-5.1-codex"}' | python3 -m json.tool | sed -n '1,40p'
 
 .PHONY: test-high
 test-high:
-	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"gpt-5"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-5.1-high"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: local-llama
 local-llama:
-	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"llama3.1:8b-instruct-q5_K_M"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"hermes3:8b"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: local-deepseek
 local-deepseek:
-	@curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -d '{"model":"deepseek-coder-v2:16b"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"deepseek-coder-v2:16b"}' | python3 -m json.tool | sed -n '1,24p'
 
 # ==== Cloud toggle sem reescrever segredos ====
 define SET_ENV_KEY

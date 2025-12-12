@@ -4,6 +4,7 @@ Validates router performance under high concurrency (50-100 RPS).
 Target: Ensure router overhead is <200ms (excluding LLM latency).
 """
 import asyncio
+import os
 import time
 import httpx
 import pytest
@@ -19,13 +20,13 @@ BASE_URL = "http://localhost:8082"
 CONCURRENCY = 50
 TOTAL_REQUESTS = 200
 
-async def make_request(client, req_id):
+async def make_request(client, req_id, headers):
     """Make a single request to the routing decision endpoint."""
     prompt = f"Load test request {req_id}: Write a sorting function."
     start = time.perf_counter()
     try:
         # We hit the debug endpoint to measure pure routing overhead
-        resp = await client.post(f"{BASE_URL}/debug/router_decision", json={"prompt": prompt})
+        resp = await client.post("/debug/router_decision", json={"prompt": prompt}, headers=headers)
         resp.raise_for_status()
         latency = (time.perf_counter() - start) * 1000  # ms
         return {"status": "ok", "latency": latency}
@@ -54,9 +55,12 @@ async def test_router_overhead_under_load():
             # Warmup
             await client.get("/healthz")
 
+            # API Key for authenticated requests
+            headers = {"X-API-Key": os.environ.get("AI_ROUTER_API_KEY", "test_secret_key_12345")}
+
             tasks = []
             for i in range(TOTAL_REQUESTS):
-                tasks.append(make_request(client, i))
+                tasks.append(make_request(client, i, headers))
             
             # Run concurrent batch
             results = await asyncio.gather(*tasks)

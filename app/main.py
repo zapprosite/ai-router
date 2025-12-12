@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response, HTTPException
+from fastapi import FastAPI, Response, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -17,7 +17,7 @@ logger = logging.getLogger("ai-router")
 from graph.router import build_compiled_router, CONFIG, REG, debug_router_decision
 
 # ---------- Startup Validation (Fail Fast) ----------
-REQUIRED_MODELS = ["llama-3.1-8b-instruct", "deepseek-coder-v2-16b", "gpt-4.1-nano", "gpt-4o-mini", "gpt-4.1", "o3", "gpt-5.1-high", "gpt-5.1-codex-mini", "gpt-5.1-codex-high"]
+REQUIRED_MODELS = ["local-chat", "local-code", "gpt-4.1-nano", "gpt-4o-mini", "gpt-4.1", "o3", "gpt-5.1-high", "gpt-5.1-codex-mini", "gpt-5.1-codex-high"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,6 +56,21 @@ async def add_security_headers(request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Content-Security-Policy"] = "default-src 'self'"
     return response
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    # Allow public access to dashboard, static files, and health checks
+    if request.url.path.startswith(("/guide", "/public", "/healthz", "/docs", "/openapi.json")) or request.url.path == "/":
+        return await call_next(request)
+    
+    # Check for API Key
+    expected_key = os.getenv("AI_ROUTER_API_KEY")
+    if expected_key:
+        client_key = request.headers.get("X-API-Key")
+        if not client_key or client_key != expected_key:
+            return Response(content="Unauthorized: Invalid or missing API Key", status_code=401)
+            
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,

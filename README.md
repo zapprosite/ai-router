@@ -11,6 +11,10 @@
 
 ## 🚀 Quick Start
 
+cd /srv/projects/ai-router
+source .venv/bin/activate
+pytest -q
+
 ### 1. Configure Secrets
 Copy the command below, replace `sk-proj-...` with your actual OpenAI API Key, and paste it into your terminal. This will securely configure your environment.
 
@@ -91,6 +95,7 @@ Visit the **[Mission Control Dashboard](http://localhost:8087/guide)** to see re
 ```bash
 curl -X POST http://localhost:8087/route \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
   -d '{
     "messages": [{"role": "user", "content": "Write a Python function to sort a list"}],
     "prefer_code": true
