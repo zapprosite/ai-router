@@ -1,119 +1,79 @@
-# AI Router (LangGraph Gateway)
+# 🧠 AI Router (Autonomous Judge)
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/yourusername/ai-router)
-[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Port](https://img.shields.io/badge/port-8087-orange)](http://localhost:8087)
+![Tree Structure](./docs/images/tree_structure.png)
 
-**An Enterprise-Grade LLM Gateway** that intelligently routes prompts between local models (Ollama) and cloud providers (OpenAI) based on complexity, cost, and code-generation needs.
+A production-grade **Local/Cloud Hybrid Router** that intelligently routes prompts to the best model based on **Expertise** and **Cost**. It acts as a "Gatekeeper", sending simple tasks to your local GPU (Free) and only difficult tasks to the Cloud ($$$).
 
----
+## 🖥️ Hardware Guide (Which Model for My GPU?)
 
-## 🚀 Quick Start
+This router uses **Ollama** for local inference. Choose your lineup based on your VRAM:
 
-cd /srv/projects/ai-router
-source .venv/bin/activate
-pytest -q
+| GPU / VRAM | Tier | Recommended Models | Notes |
+| :--- | :--- | :--- | :--- |
+| **RTX 4090 (24GB)** | **God Tier** | `deepseek-coder-v2:16b`<br>`llama3.1:8b` | Can run logic + code locally. 95% offload possible. |
+| **RTX 3060 (12GB)** | **Mid Tier** | `deepseek-coder:6.7b`<br>`llama3.1:8b-q4` | Good for chat, struggling with complex code. |
+| **GTX 1060 / CPU** | **Low Tier** | `qwen2.5:1.5b`<br>`llama3.2:3b` | Strictly fallback. Use Cloud for 90% of tasks. |
 
-### 1. Configure Secrets
-Copy the command below, replace `sk-proj-...` with your actual OpenAI API Key, and paste it into your terminal. This will securely configure your environment.
+> **Tip**: Edit `config/router_config.yaml` to change the `model` name to match what you installed.
 
+## 🚀 Installation (Zero to Hero)
+
+Follow these steps exactly to set up your router.
+
+### Phase 1: Prerequisites
+1.  **Install Python 3.12+**.
+2.  **Install [Ollama](https://ollama.com)** and pull your models:
+    ```bash
+    # For RTX 4090 (24GB)
+    ollama pull hermes3:8b
+    ollama pull deepseek-coder-v2:16b
+    ```
+
+### Phase 2: Setup Repository
 ```bash
-sudo tee /srv/projects/ai-router/config/.env.local > /dev/null << 'EOF'
-# === AI ROUTER CONFIGURATION ===
-# Replace the key below with your actual OpenAI API Key
-OPENAI_API_KEY_TIER2=sk-proj-YOUR_ACTUAL_KEY_HERE_REPLACE_ME
+# 1. Create Virtual Environment
+make venv
 
-# Router Settings
-ENABLE_OPENAI_FALLBACK=1
-OPENAI_TIMEOUT_SEC=20
-EOF
-```
+# 2. Setup Configuration
+cp config/.env.local.example config/.env.local
+# (Optional) Edit config/.env.local to add OPENAI_API_KEY if you want Cloud Fallback
 
-### 2. Launch the Router
-Get the system up and running in seconds.
-
-```bash
-# Start the server (Development Mode)
+# 3. Start the Server (Hot-Reload Mode)
 make dev
-# Service will be available at http://localhost:8087
 ```
 
----
-
-## ⚡ Key Features
-
-*   **💡 Intelligent Routing**: Automatically directs simple tasks to local models (Llama 3.1, DeepSeek) and complex reasoning to Cloud/Tier 5 (GPT-5.1, O3).
-*   **🛡️ Cost Guard**: Real-time budget protection prevents accidental overspending.
-*   **👁️ Observability**: Built-in metrics endpoint and cost reporting scripts.
-*   **🔌 Drop-in Replacement**: Compatible with OpenAI's API format.
-*   **Multi-Tier Architecture**:
-    *   **Tier 1 (Local)**: Llama 3.1 (Fast, Free)
-    *   **Tier 2 (Code)**: DeepSeek Coder (Specialized Local)
-    *   **Tier 3 (Cloud)**: GPT-4.1 / GPT-4o-mini (Balanced)
-    *   **Tier 4 (Reasoning)**: o-series / o3-mini (Complex Logic)
-    *   **Tier 5 (Elite)**: GPT-5.1 High / Codex (State of the Art)
-
----
-
-## ⚙️ Customization
-
-### Changing Models
-To modify the available models or routing logic, edit `config/router_config.yaml`.
-
+### Phase 3: Verify
+Open the [Command Center](http://localhost:8082/guide) or run:
 ```bash
-nano config/router_config.yaml
-```
-
-**Example: Add a new model**
-```yaml
-  - id: my-new-model
-    provider: openai
-    name: "gpt-4-turbo"
-    tier: 3
-    capabilities: ["general", "fast"]
-```
-
-### Routing Logic
-You can adjust the routing thresholds in the `routing_policy` section of the config file.
-
-```yaml
-  code_gen:
-    low: ["deepseek-coder-v2-16b"] # Local
-    high: ["gpt-5.1-codex-mini"]    # Cloud
-    critical: ["gpt-5.1-codex-high"] # Best Available
+# Run a quick smoke test
+make smoke
 ```
 
 ---
 
-## 🛠️ API Usage
+## 🎮 Command Center (Dashboard)
 
-### Interactive Dashboard
-Visit the **[Mission Control Dashboard](http://localhost:8087/guide)** to see real-time routing decisions and system status.
+![Dashboard](./docs/images/dashboard.png)
 
-### Example Request
-```bash
-curl -X POST http://localhost:8087/route \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: SUA_CHAVE_AQUI" \
-  -d '{
-    "messages": [{"role": "user", "content": "Write a Python function to sort a list"}],
-    "prefer_code": true
-  }'
-```
+Access the dashboard at **[http://localhost:8082/guide](http://localhost:8082/guide)**. It provides one-click copy for all commands.
 
----
+### Common Commands
+| Command | Action |
+| :--- | :--- |
+| `make dev` | Starts server in dev mode (Port 8082). |
+| `make verify` | Runs full test suite (Lint + Unit + Integration). |
+| `make cloud-on` | Enables Cloud Fallback (OpenAI). |
+| `make cloud-off` | Disables Cloud Fallback (Local Only). |
+| `make local-llama` | Tests the Local Llama model. |
 
 ## 📚 Documentation
 
-- **[Getting Started](docs/GETTING_STARTED.md)**: Zero to Hero tutorial.
-- **[Architecture](docs/ARCHITECTURE.md)**: How the decision engine works.
-- **[Changelog](CHANGELOG.md)**: Version history and updates.
+| Guide | Purpose |
+| :--- | :--- |
+| **[Architecture](./docs/ARCHITECTURE.md)** | Deep dive into the **Autonomous Judge**, Expertise Matrix, and Model Roles. |
+| **[Integration](./docs/INTEGRATION.md)** | How to connect **Web Clients**, **React**, and **VS Code (Continue)**. |
+| **[Deployment](./docs/DEPLOYMENT.md)** | Production setup: **Docker**, Systemd, and Secrets. |
+| **[Contributing](./CONTRIBUTING.md)** | Developer Guide: `make verify`, Testing, and adding models. |
 
-## 🤝 Contributing
-
-Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** for details on our code of conduct and the process for submitting pull requests.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the `LICENSE` file for details.
+---
+*Built with ❤️ by the AI Router Team.*

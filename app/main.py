@@ -1,10 +1,14 @@
-from fastapi import FastAPI, Response, HTTPException, Request
-from fastapi.responses import RedirectResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import List, Literal, Optional, Dict, Any
+import json
+import logging
+import os
+import time
 from contextlib import asynccontextmanager
-import os, time, json, logging
+from typing import Any, Dict, List, Literal, Optional
+
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 # ---------- Structured Logging ----------
 logging.basicConfig(
@@ -14,10 +18,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ai-router")
 
-from graph.router import build_compiled_router, CONFIG, REG, debug_router_decision
+from graph.router import REG, build_compiled_router, debug_router_decision
 
 # ---------- Startup Validation (Fail Fast) ----------
-REQUIRED_MODELS = ["local-chat", "local-code", "gpt-4.1-nano", "gpt-4o-mini", "gpt-4.1", "o3", "gpt-5.1-high", "gpt-5.1-codex-mini", "gpt-5.1-codex-high"]
+REQUIRED_MODELS = ["local-chat", "local-code", "gpt-4.1-nano", "gpt-4o-mini", "gpt-4.1", "o3", "gpt-5.2-high", "gpt-5.2-codex-mini", "gpt-5.2-codex-high"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,7 +41,6 @@ app = FastAPI(title="AI Router (LangGraph/LangChain 1.0)", version="1.0.0", life
 # Global Exception Handler for clean 500s
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    import traceback
     return Response(
         content=json.dumps({
             "error": "Internal Server Error",
@@ -66,7 +69,22 @@ async def api_key_middleware(request: Request, call_next):
     # Check for API Key
     expected_key = os.getenv("AI_ROUTER_API_KEY")
     if expected_key:
+        # 1. Try X-API-Key
         client_key = request.headers.get("X-API-Key")
+        
+        # 2. Try Authorization header
+        if not client_key:
+            auth_header = request.headers.get("Authorization")
+            if auth_header:
+                if auth_header.startswith("Bearer "):
+                    client_key = auth_header[7:]  # Strip "Bearer "
+                else:
+                    client_key = auth_header  # Use raw token
+        
+        # Log auth attempt (masked)
+        has_auth = bool(client_key)
+        logger.info(f"Auth request: path={request.url.path} auth_provided={has_auth}")
+
         if not client_key or client_key != expected_key:
             return Response(content="Unauthorized: Invalid or missing API Key", status_code=401)
             
@@ -91,9 +109,12 @@ class RouteRequest(BaseModel):
 
 router_app = build_compiled_router()
 
+import hashlib
+import pathlib
+
+import yaml
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-import pathlib, hashlib, yaml
 
 # montar /public para servir o painel
 try:
@@ -119,7 +140,8 @@ def debug_where():
     mods={}
     for mname in ("app.main","graph.router","providers.ollama_client","providers.openai_client"):
         try:
-            import importlib, pathlib
+            import importlib
+            import pathlib
             m = importlib.import_module(mname)
             f = pathlib.Path(getattr(m,"__file__","")).resolve()
             mods[mname] = {"file": str(f), "sha16": sha16(str(f))}
@@ -237,18 +259,24 @@ def list_models_openai():
     except Exception:
         # tolerate missing/invalid config on cold start; still expose router-auto
         pass
-    # Ensure logical router model is present for OpenAI-compat clients
-    if not any((d.get("id") == "router-auto") for d in data):
-        data.append({
-            "id": "router-auto",
-            "object": "model",
-            "owned_by": "router",
-            "created": int(time.time()),
-        })
+    # Ensure logical router models are present for OpenAI-compat clients
+    virtual_models = ["router-auto", "router-local", "router-code"]
+    existing_ids = {d.get("id") for d in data}
+    
+    for vm in virtual_models:
+        if vm not in existing_ids:
+            data.append({
+                "id": vm,
+                "object": "model",
+                "owned_by": "ai-router",
+                "created": int(time.time()),
+            })
     return {"object": "list", "data": data}
 
 # --- Ações: smoke e teste de modelo ---
 from pydantic import BaseModel
+
+
 class TestReq(BaseModel):
     model: str
     prompt: str | None = None
@@ -291,6 +319,41 @@ def actions_test(body: TestReq):
 def healthz(): return {"ok": True}
 
 # --- OpenAI shim: /v1/chat/completions ---
+# --- Shared Routing Logic ---
+def _run_router_completion(messages: List[Dict], prefer_code: bool = False, **kwargs) -> Dict:
+    """
+    Shared utility to invoke the router graph.
+    Returns the raw output dictionary from router_app.invoke().
+    """
+    try:
+        out = router_app.invoke({
+            "messages": messages,
+            "budget": "balanced",
+            "prefer_code": prefer_code,
+        })
+        
+        # Check for explicitly returned error objects (e.g. from upstream)
+        if isinstance(out, dict) and out.get("type") == "upstream_error":
+            # Parse status code from error string "Upstream Error 402: ..."
+            # Default to 500 if parsing fails
+            status = 500
+            detail = out.get("error", "Unknown upstream error")
+            
+            import re
+            match = re.search(r"Upstream Error (\d+):", detail)
+            if match:
+                status = int(match.group(1))
+            
+            raise HTTPException(status_code=status, detail=detail)
+            
+        return out
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- OpenAI shim: /v1/chat/completions ---
 class _ChatMsg(BaseModel):
     role: Literal["system","user","assistant","tool"]
     content: str
@@ -306,14 +369,11 @@ def _chat_completions(body: _ChatReq):
     # Minimal heuristic to hint code preference
     txt = "\n".join([m.content for m in body.messages if m.role in ("user","system")])
     prefer_code = ("```" in txt) or ("def " in txt) or ("class " in txt) or ("traceback" in txt)
-    try:
-        out = router_app.invoke({
-            "messages": [m.model_dump() for m in body.messages],
-            "budget": "balanced",
-            "prefer_code": bool(prefer_code),
-        })
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    
+    out = _run_router_completion(
+        messages=[m.model_dump() for m in body.messages],
+        prefer_code=bool(prefer_code)
+    )
 
     content = (
         out.get("output")
@@ -322,9 +382,15 @@ def _chat_completions(body: _ChatReq):
         or (out.get("message") or {}).get("content")
         or ""
     )
-    model_used = (out.get("usage") or {}).get("resolved_model_id") or "router-auto"
+    usage_data = out.get("usage") or {}
+    model_used = usage_data.get("resolved_model_id") or "router-auto"
+    escalated = usage_data.get("escalated", False)
+    escalation_reason = usage_data.get("escalation_reason") or ""
+    attempts = usage_data.get("attempts", [])
+    initial_model = attempts[0].get("model") if attempts else model_used
+    
     created = int(time.time())
-    return {
+    response_body = {
         "id": f"chatcmpl-{created}",
         "object": "chat.completion",
         "created": created,
@@ -336,8 +402,252 @@ def _chat_completions(body: _ChatReq):
                 "finish_reason": "stop",
             }
         ],
-        "usage": out.get("usage", {}),
+        "usage": usage_data,
     }
+    
+    # Return with observability headers
+    return Response(
+        content=json.dumps(response_body),
+        media_type="application/json",
+        headers={
+            "X-AI-Router-Initial-Model": initial_model,
+            "X-AI-Router-Final-Model": model_used,
+            "X-AI-Router-Escalated": str(escalated).lower(),
+            "X-AI-Router-Escalation-Reason": escalation_reason,
+        }
+    )
+
+# --- OpenAI Responses API: /v1/responses ---
+# Flexible schema to accept both simple strings and complex Codex CLI format
+from fastapi.responses import StreamingResponse
+
+
+class _ResponseReq(BaseModel):
+    model: str
+    input: Any  # Accept string, list of messages, or Codex-style input items
+    stream: Optional[bool] = False
+    metadata: Optional[Dict[str, Any]] = None
+    temperature: Optional[float] = 0.2
+    max_output_tokens: Optional[int] = None
+
+def _normalize_content(content: Any) -> str:
+    """
+    Normalize content field which can be:
+    - A simple string
+    - An array of content items like [{"type": "input_text", "text": "..."}, ...]
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        # Concatenate text from all input_text items
+        texts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "input_text":
+                texts.append(item.get("text", ""))
+        return "\n".join(texts)
+    return str(content)
+
+def _normalize_input_to_messages(input_data: Any) -> List[Dict[str, str]]:
+    """
+    Normalize input field which can be:
+    - A simple string -> [{"role": "user", "content": input}]
+    - A list of message dicts with role/content
+    - Codex-style: [{"type": "message", "role": "user", "content": [...]}, ...]
+    """
+    if isinstance(input_data, str):
+        return [{"role": "user", "content": input_data}]
+    
+    if isinstance(input_data, list):
+        messages = []
+        for item in input_data:
+            if not isinstance(item, dict):
+                continue
+            
+            # Handle Codex-style {type: "message", role: "...", content: [...]}
+            if item.get("type") == "message":
+                role = item.get("role", "user")
+                content = _normalize_content(item.get("content", ""))
+                if content:
+                    messages.append({"role": role, "content": content})
+            # Handle simple {role: "...", content: "..."}
+            elif "role" in item and "content" in item:
+                role = item.get("role", "user")
+                content = _normalize_content(item.get("content", ""))
+                if content:
+                    messages.append({"role": role, "content": content})
+        
+        if not messages:
+            raise HTTPException(status_code=400, detail="Invalid input format: no valid messages found")
+        return messages
+    
+    raise HTTPException(status_code=400, detail="Invalid input format: expected string or array")
+
+def _sse_event(event: str, data: dict) -> str:
+    """Format an SSE event."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+@app.post("/v1/responses")
+def _responses_api(body: _ResponseReq, request: Request):
+    # Check if streaming is requested
+    accept_header = request.headers.get("accept", "")
+    stream_requested = body.stream == True or "text/event-stream" in accept_header
+    
+    # 1. Normalize input -> messages
+    messages = _normalize_input_to_messages(body.input)
+    txt = "\n".join([m["content"] for m in messages if m["role"] in ("user", "system")])
+
+    # 2. Heuristic for code
+    prefer_code = ("```" in txt) or ("def " in txt) or ("class " in txt) or ("traceback" in txt)
+
+    # 3. Invoke Router
+    out = _run_router_completion(
+        messages=messages,
+        prefer_code=bool(prefer_code)
+    )
+
+    # 4. Extract content
+    content = (
+        out.get("output")
+        or out.get("content")
+        or out.get("text")
+        or (out.get("message") or {}).get("content")
+        or ""
+    )
+    model_used = (out.get("usage") or {}).get("resolved_model_id") or "router-auto"
+    created = int(time.time())
+    response_id = f"resp-{created}"
+
+    # 5. Build usage with required fields for Codex
+    raw_usage = out.get("usage", {})
+    usage_obj = {
+        "input_tokens": raw_usage.get("prompt_tokens_est", raw_usage.get("input_tokens", 0)),
+        "output_tokens": raw_usage.get("completion_tokens_est", raw_usage.get("output_tokens", 0)),
+        "total_tokens": raw_usage.get("total_tokens_est", raw_usage.get("total_tokens", 0)),
+    }
+    # Include extra fields if available
+    usage_obj.update({k: v for k, v in raw_usage.items() if k not in usage_obj})
+
+    # 6. Build output item
+    output_item = {
+        "id": "item_0",
+        "type": "message",
+        "role": "assistant",
+        "status": "completed",
+        "content": [{"type": "output_text", "text": content}]
+    }
+
+    # 7. Build response object
+    response_obj = {
+        "id": response_id,
+        "object": "response",
+        "created": created,
+        "status": "completed",
+        "model": model_used,
+        "output": [output_item],
+        "usage": usage_obj
+    }
+
+    # 8. Handle streaming or non-streaming response
+    if stream_requested:
+        def generate_sse():
+            seq = 0
+            try:
+                # Event 1: response.created
+                yield _sse_event("response.created", {
+                    "type": "response.created",
+                    "sequence_number": seq,
+                    "response": {
+                        "id": response_id,
+                        "object": "response",
+                        "created": created,
+                        "status": "in_progress",
+                        "model": model_used,
+                        "output": []
+                    }
+                })
+                seq += 1
+                
+                # Event 2: response.output_item.added (REQUIRED before delta)
+                yield _sse_event("response.output_item.added", {
+                    "type": "response.output_item.added",
+                    "sequence_number": seq,
+                    "output_index": 0,
+                    "item": {
+                        "id": "item_0",
+                        "type": "message",
+                        "role": "assistant",
+                        "status": "in_progress",
+                        "content": []
+                    }
+                })
+                seq += 1
+                
+                # Event 3: response.content_part.added
+                yield _sse_event("response.content_part.added", {
+                    "type": "response.content_part.added",
+                    "sequence_number": seq,
+                    "item_id": "item_0",
+                    "output_index": 0,
+                    "content_index": 0,
+                    "part": {"type": "output_text", "text": ""}
+                })
+                seq += 1
+                
+                # Event 4: response.output_text.delta (full text as single delta)
+                yield _sse_event("response.output_text.delta", {
+                    "type": "response.output_text.delta",
+                    "sequence_number": seq,
+                    "item_id": "item_0",
+                    "output_index": 0,
+                    "content_index": 0,
+                    "delta": content
+                })
+                seq += 1
+                
+                # Event 5: response.output_text.done
+                yield _sse_event("response.output_text.done", {
+                    "type": "response.output_text.done",
+                    "sequence_number": seq,
+                    "item_id": "item_0",
+                    "output_index": 0,
+                    "content_index": 0,
+                    "text": content
+                })
+                seq += 1
+                
+                # Event 6: response.output_item.done
+                yield _sse_event("response.output_item.done", {
+                    "type": "response.output_item.done",
+                    "sequence_number": seq,
+                    "output_index": 0,
+                    "item": output_item
+                })
+                seq += 1
+                
+                # Event 7: response.completed
+                yield _sse_event("response.completed", {
+                    "type": "response.completed",
+                    "sequence_number": seq,
+                    "response": response_obj
+                })
+            except Exception as e:
+                # Event: error
+                yield _sse_event("error", {
+                    "type": "error",
+                    "error": {"message": str(e), "type": "internal_error"}
+                })
+        
+        return StreamingResponse(
+            generate_sse(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+    else:
+        return response_obj
 
 @app.post("/route")
 def route(req: RouteRequest) -> Dict[str, Any]:

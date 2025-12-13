@@ -1,6 +1,6 @@
-import os
 import logging
 import math
+import os
 
 logger = logging.getLogger("ai-router.cost")
 
@@ -16,16 +16,24 @@ PRICING_PER_1M = {
 
 def _get_tier_from_model(model_name: str) -> str:
     """Reverse lookup tier from model name using Env vars."""
-    if model_name == os.getenv("OPENAI_CODE_ELITE"): return "elite"
-    if model_name == os.getenv("OPENAI_CODE_REASONING"): return "reasoning"
-    if model_name == os.getenv("OPENAI_CODE_STANDARD"): return "standard"
-    if model_name == os.getenv("OPENAI_CODE_MINI"): return "mini"
+    if model_name == os.getenv("OPENAI_CODE_ELITE"): 
+        return "elite"
+    if model_name == os.getenv("OPENAI_CODE_REASONING"):
+        return "reasoning"
+    if model_name == os.getenv("OPENAI_CODE_STANDARD"):
+        return "standard"
+    if model_name == os.getenv("OPENAI_CODE_MINI"):
+        return "mini"
     
-    if model_name == os.getenv("OPENAI_TEXT_STANDARD"): return "standard"
-    if model_name == os.getenv("OPENAI_TEXT_NANO"): return "mini"
+    if model_name == os.getenv("OPENAI_TEXT_STANDARD"):
+        return "standard"
+    if model_name == os.getenv("OPENAI_TEXT_NANO"):
+        return "mini"
     
-    if "llama" in model_name.lower(): return "local"
-    if "deepseek" in model_name.lower(): return "local"
+    if "llama" in model_name.lower():
+        return "local"
+    if "deepseek" in model_name.lower():
+        return "local"
     
     return "standard" # Default fallback
 

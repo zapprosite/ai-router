@@ -4,8 +4,6 @@ Enforces "Poor Dev" optimization strategy (DeepSeek First) and critical escalati
 """
 import os
 import sys
-import pytest
-from unittest.mock import patch
 
 sys.path.insert(0, os.getcwd())
 
@@ -14,7 +12,8 @@ os.environ["OPENAI_API_KEY"] = "sk-test-mock"
 # Ensure simple routing without LLM classifier unless necessary
 os.environ["ENABLE_OPENAI_FALLBACK"] = "1"
 
-from graph.router import classify_prompt, select_model_from_policy, RoutingMeta, REG
+from graph.router import classify_prompt, select_model_from_policy
+
 
 class TestPoorDevStrategy:
     """
@@ -66,8 +65,8 @@ class TestPoorDevStrategy:
         assert meta.complexity == "critical"
         
         model = select_model_from_policy(meta)
-        # Should trigger critical path -> gpt-5.1-codex-high or o3
-        assert "gpt-5.1-codex-high" in model or "o3" in model
+        # Should trigger critical path -> gpt-5.2-codex-high or o3
+        assert "gpt-5.2-codex-high" in model or "o3" in model
 
     def test_escalation_for_complex_reasoning(self):
         """
@@ -80,8 +79,8 @@ class TestPoorDevStrategy:
         assert meta.complexity in ["high", "critical"]
         
         model = select_model_from_policy(meta)
-        # Should escalate to o3 or gpt-5.1-high
-        assert any(m in model for m in ["gpt-5.1-high", "o3", "o3-mini"])
+        # Should escalate to o3 or gpt-5.2-high
+        assert any(m in model for m in ["gpt-5.2-high", "o3", "o3-mini"])
 
 class TestRegexBoosting:
     """

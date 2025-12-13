@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-import sys, json, urllib.request
+import json
+import sys
+import urllib.request
+
 
 def call_route(messages, budget="balanced", prefer_code=None):
     body = {"messages": messages, "budget": budget}
@@ -19,17 +22,52 @@ def main():
     for line in sys.stdin:
         msg = json.loads(line)
         if msg.get("method") == "tool/list":
-            print(json.dumps({"id": msg.get("id"), "result": [{"name":"ai_router.route","description":"Call /route on local AI Router"}]})); sys.stdout.flush()
+            response = {
+                "id": msg.get("id"),
+                "result": [{
+                    "name": "ai_router.route",
+                    "description": "Call /route on local AI Router"
+                }]
+            }
+            print(json.dumps(response))
+            sys.stdout.flush()
+
         elif msg.get("method") == "tool/call":
-            params = msg["params"]; name = params["name"]
+            params = msg["params"]
+            name = params["name"]
+
             if name != "ai_router.route":
-                print(json.dumps({"id": msg.get("id"), "error": {"message":"unknown tool"}})); sys.stdout.flush(); continue
+                print(json.dumps({
+                    "id": msg.get("id"),
+                    "error": {"message": "unknown tool"}
+                }))
+                sys.stdout.flush()
+                continue
+            
             args = params.get("arguments") or {}
-            out = call_route(args.get("messages", []), args.get("budget","balanced"), args.get("prefer_code"))
-            result = {"content": out.get("content") or out.get("text") or (out.get("message") or {}).get("content") or out.get("output"), "usage": out.get("usage")}
-            print(json.dumps({"id": msg.get("id"), "result": result})); sys.stdout.flush()
+            out = call_route(
+                args.get("messages", []),
+                args.get("budget", "balanced"),
+                args.get("prefer_code")
+            )
+
+            content = (
+                out.get("content") or 
+                out.get("text") or 
+                (out.get("message") or {}).get("content") or 
+                out.get("output")
+            )
+            result = {"content": content, "usage": out.get("usage")}
+            
+            print(json.dumps({"id": msg.get("id"), "result": result}))
+            sys.stdout.flush()
+
         else:
-            print(json.dumps({"id": msg.get("id"), "error": {"message":"unknown method"}})); sys.stdout.flush()
+            print(json.dumps({
+                "id": msg.get("id"),
+                "error": {"message": "unknown method"}
+            }))
+            sys.stdout.flush()
 
 if __name__ == "__main__":
     main()

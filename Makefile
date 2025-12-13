@@ -17,10 +17,10 @@ help:
 	@echo "== AI Router — Atalhos =="
 	@echo "  make venv           # cria venv e instala requirements.txt   #comentario_tutor: 1a vez / atualizar deps"
 	@echo "  make env            # carrega ENV desta sessão               #comentario_tutor: não afeta outras shells"
-	@echo "  make run            # sobe FastAPI (foreground em 8087)      #comentario_tutor: CONFLITA se service ativo"
-	@echo "  make run-dev        # sobe FastAPI (reload) em 8087          #comentario_tutor: UNIFICADO (ideal p/ debug)"
-	@echo "  make stop           # para o service systemd                 #comentario_tutor: libera 8087"
-	@echo "  make free-8087      # força liberar porta 8087               #comentario_tutor: usa fuser/pkill"
+	@echo "  make run            # sobe FastAPI (foreground em 8082)      #comentario_tutor: CONFLITA se service ativo"
+	@echo "  make run-dev        # sobe FastAPI (reload) em 8082          #comentario_tutor: UNIFICADO (ideal p/ debug)"
+	@echo "  make stop           # para o service systemd                 #comentario_tutor: libera 8082"
+	@echo "  make free-8082      # força liberar porta 8082               #comentario_tutor: usa fuser/pkill"
 	@echo "  make status         # status systemd                          #comentario_tutor: ver se está 'active (running)'"
 	@echo "  make restart        # restart + healthz                       #comentario_tutor: reinicia serviço web"
 	@echo "  make logs           # últimos logs                            #comentario_tutor: tail curto no journal"
@@ -48,31 +48,31 @@ env:
 	@set -a; . $(ENVF); set +a; echo "OK: env carregado de $(ENVF)"
 
 .PHONY: run
-run:
-	@set -a; . $(ENVF); set +a; . $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8087
+run: kill-8082
+	@set -a; . $(ENVF); set +a; . $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8082
 
 .PHONY: run-dev
-run-dev:
-	@echo "#comentario_tutor: iniciando Uvicorn com --reload em 8087 (Unificado)"
-	@set -a; . $(ENVF); set +a; . $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8087 --reload
+run-dev: kill-8082
+	@echo "#comentario_tutor: iniciando Uvicorn com --reload em 8082 (Unificado)"
+	@set -a; . $(ENVF); set +a; . $(VENV)/bin/activate && python -m uvicorn app.main:app --host 0.0.0.0 --port 8082 --reload
 
 .PHONY: pre-flight
 pre-flight:
 	@./scripts/PRE_FLIGHT_CHECK.sh
 
 .PHONY: dev
-dev: pre-flight run-dev
+dev: kill-8082 pre-flight run-dev
 
 .PHONY: stop
 stop:
 	@$(SUDO) systemctl stop $(SERVICE) || true
 	@echo "service parado"
 
-.PHONY: free-8087
-free-8087:
-	@fuser -k 8087/tcp || true
-	@pkill -f "uvicorn app.main:app.*8087" || true
-	@echo "porta 8087 livre"
+.PHONY: free-8082
+free-8082:
+	@fuser -k 8082/tcp || true
+	@pkill -f "uvicorn app.main:app.*8082" || true
+	@echo "porta 8082 livre"
 
 .PHONY: status
 status:
@@ -81,7 +81,7 @@ status:
 .PHONY: restart
 restart:
 	@$(SUDO) systemctl restart $(SERVICE)
-	@sleep 1; curl -fsS http://localhost:8087/healthz && echo "healthz OK" || (echo "healthz FAIL" && exit 1)
+	@sleep 1; curl -fsS http://localhost:8082/healthz && echo "healthz OK" || (echo "healthz FAIL" && exit 1)
 
 .PHONY: logs
 logs:
@@ -92,36 +92,36 @@ warm:
 	@$(SUDO) systemctl start $(WARM_SERVICE).service || true
 
 define _CURL
-source $(ENVF) && curl -s http://localhost:8087/route -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d
+source $(ENVF) && curl -s http://localhost:8082/route -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d
 endef
 
 .PHONY: smoke
 smoke:
-	@./scripts/SMOKE_NOW.sh
+	@set -a; . $(ENVF); set +a; ./scripts/SMOKE_NOW.sh
 
 .PHONY: test-nano
 test-nano:
-	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-4.1-nano"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-4.1-nano"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: test-mini
 test-mini:
-	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-4o-mini"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-4o-mini"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: test-codex
 test-codex:
-	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-5.1-codex"}' | python3 -m json.tool | sed -n '1,40p'
+	@. $(ENVF) && curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-5.2-codex"}' | python3 -m json.tool | sed -n '1,40p'
 
 .PHONY: test-high
 test-high:
-	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-5.1-high"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"gpt-5.2-high"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: local-llama
 local-llama:
-	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"hermes3:8b"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"hermes3:8b"}' | python3 -m json.tool | sed -n '1,24p'
 
 .PHONY: local-deepseek
 local-deepseek:
-	@. $(ENVF) && curl -s http://localhost:8087/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"deepseek-coder-v2:16b"}' | python3 -m json.tool | sed -n '1,24p'
+	@. $(ENVF) && curl -s http://localhost:8082/actions/test -H 'content-type: application/json' -H "X-API-Key: $${AI_ROUTER_API_KEY}" -d '{"model":"deepseek-coder-v2:16b"}' | python3 -m json.tool | sed -n '1,24p'
 
 # ==== Cloud toggle sem reescrever segredos ====
 define SET_ENV_KEY
@@ -147,14 +147,14 @@ cloud-on:
 	@$(call SET_ENV_KEY,ENABLE_OPENAI_FALLBACK,1)
 	@echo "#comentario_tutor: fallback ligado (usa a chave já presente em $(ENVF))"
 	@$(SUDO) systemctl restart $(SERVICE)
-	@sleep 1; curl -fsS http://localhost:8087/healthz && echo "healthz OK"
+	@sleep 1; curl -fsS http://localhost:8082/healthz && echo "healthz OK"
 
 .PHONY: cloud-off
 cloud-off:
 	@$(call SET_ENV_KEY,ENABLE_OPENAI_FALLBACK,0)
 	@echo "#comentario_tutor: fallback desligado (custo zero; mantém a chave no arquivo)"
 	@$(SUDO) systemctl restart $(SERVICE)
-	@sleep 1; curl -fsS http://localhost:8087/healthz && echo "healthz OK"
+	@sleep 1; curl -fsS http://localhost:8082/healthz && echo "healthz OK"
 
 # ==== Backup & Restore ====
 .PHONY: backup-all
@@ -181,62 +181,16 @@ init:
 	@mkdir -p /srv-2/dev/ai-router-codex/{state,logs}
 	@echo "OK: estado preparado em /srv-2/dev/ai-router-codex"
 
-.PHONY: health
-health:
-	@tools/healthcheck.sh
-
-
-.PHONY: resume
-resume:
-	@tools/resume.sh
-.PHONY: evals
-evals:
-	@mkdir -p .reports
-	@./scripts/EVALS_RUN.sh | tee .reports/evals.out || (echo "EVALS FAIL"; exit 1)
-
-
-.PHONY: check-unused
-	@vars=$$(awk -F= '/^[A-Z0-9_]+[[:space:]]*[:+]?=/{print $$1}' Makefile | sed 's/[[:space:]]*[:+]*$$//'); \
-	for v in $$vars; do \
-	  pattern='$$('"$$v"')'; \
-	  grep -q -F "$$pattern" Makefile || echo "UNUSED: $$v"; \
-	done; true
-.PHONY: panel-json
-panel-json:
-	@. .venv/bin/activate && python3 scripts/extract_make_cmds.py
-
-.PHONY: panel-refresh
-panel-refresh: panel-json
-	@curl -fsS http://localhost:8087/public/guide_cmds.json | jq length
-	@echo "OK: painel atualizado"
-
 # Sanity checks for Makefile formatting (tabs, LF)
 .PHONY: check-tabs
 check-tabs:
 	@make -n help >/dev/null 2>&1 || (echo "FAIL: Makefile tabs/separators" && exit 1)
-	@LC_ALL=C grep -q $'\r' Makefile && (echo 'FAIL: CRLF found' && exit 1) || echo 'OK: LF only'
+	@file Makefile | grep -q CRLF && (echo 'FAIL: CRLF found' && exit 1) || echo 'OK: LF only'
 	@echo "OK: tabs/targets look fine"
-
-# Painel: lista minimalista, somente comandos (copiáveis) via data-cmd
-## data-cmd: make venv
-## data-cmd: make env
-## data-cmd: make run-dev
-## data-cmd: make smoke
-## data-cmd: make evals
-## data-cmd: curl -fsS http://localhost:8087/healthz
-## data-cmd: curl -fsS http://localhost:8087/v1/models | jq '.data[].id'
-## data-cmd: curl -s http://localhost:8087/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Explique HVAC em 1 frase."}]}' | python3 -m json.tool | sed -n '1,24p'
-## data-cmd: curl -s http://localhost:8087/route -H 'content-type: application/json' -d '{"messages":[{"role":"user","content":"Escreva uma função Python soma(n1,n2) com docstring."}],"prefer_code":true}' | python3 -m json.tool | sed -n '1,24p'
-## data-cmd: scripts/LATENCY_PROBE.sh
-## data-cmd: scripts/RUN_AUDIT_AND_TESTS.sh
 
 .PHONY: guide-open
 guide-open:
-	@xdg-open http://localhost:8087/guide >/dev/null 2>&1 || echo "Abra: http://localhost:8087/guide"
-
-.PHONY: docs-rewrite
-docs-rewrite:
-	@./scripts/CODEX_RUN_REWRITE_DOCS.sh
+	@xdg-open http://localhost:8082/guide >/dev/null 2>&1 || echo "Abra: http://localhost:8082/guide"
 
 .PHONY: docs-verify
 docs-verify:
@@ -257,13 +211,37 @@ docs-verify:
 
 .PHONY: test-continue
 test-continue:
-	@. $(VENV)/bin/activate && PYTHONPATH=$(PWD) python -m pytest -q tests/test_chat_completions.py
+	@. $(VENV)/bin/activate && PYTHONPATH=$(PWD) python -m pytest -q tests/unit/test_chat_completions.py
 
-.PHONY: kill-8087
-kill-8087:
-	@p=$$(ss -ltnp 2>/dev/null | awk '/:8087 /{print $$7}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p'); \
+.PHONY: kill-8082
+kill-8082:
+	@p=$$(ss -ltnp 2>/dev/null | awk '/:8082 /{print $$7}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p'); \
 	[ -z "$$p" ] || (echo "Killing $$p" && kill -9 $$p) || true
 
-.PHONY: check-continue-config
-check-continue-config:
-	python3 scripts/validate_continue_config.py
+# Modern Code Quality (Ruff)
+.PHONY: lint
+lint:
+	@echo "🔍 Running Linter (Ruff)..."
+	@$(VENV)/bin/ruff check .
+
+.PHONY: format
+format:
+	@echo "✨ Auto-formatting Code..."
+	@$(VENV)/bin/ruff check --fix .
+	@$(VENV)/bin/ruff format .
+
+# Verify target (CI/CD)
+.PHONY: verify
+verify: lint
+	@echo "== Running Full Verification Suite =="
+	@echo "[1/4] Checking service health..."
+	@curl -s -f -o /dev/null http://localhost:8082/healthz && echo "✅ Service healthy" || (echo "❌ Service NOT running on 8082! Run 'make run' first." && exit 1)
+	@echo "[2/4] python3 tests/integration/eval_routing.py..."
+	@. $(VENV)/bin/activate && python3 tests/integration/eval_routing.py || (echo "VERIFY FAILED: eval_routing" && exit 1)
+	@echo "[3/4] pytest..."
+	@. $(VENV)/bin/activate && pytest -q || (echo "VERIFY FAILED: pytest" && exit 1)
+	@echo "[4/4] python3 tests/integration/test_chaos.py..."
+	@echo ""
+	@echo "=========================================="
+	@echo "          VERIFY OK"
+	@echo "=========================================="

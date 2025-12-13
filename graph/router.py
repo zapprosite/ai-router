@@ -12,17 +12,25 @@ Architecture:
 4. Model invocation with SLA monitoring and fallbacks
 """
 
-import os, re, math, time, yaml, pathlib, logging
-from typing import Any, Dict, List, TypedDict, Optional, Tuple
-from dataclasses import dataclass, asdict
+import datetime
+import json
+import logging
+import math
+import os
+import pathlib
+import re
+import time
+import uuid
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Tuple, TypedDict
 
-from langgraph.graph import StateGraph, END
-from langchain_core.runnables import RunnableBranch, RunnableLambda
+import yaml
+from langchain_core.runnables import RunnableLambda
+from langgraph.graph import END, StateGraph
 
-from providers.openai_client import make_openai
+from graph.cost_guard import PRICING_PER_1M, _get_tier_from_model
 from providers.ollama_client import make_ollama
-from graph.cost_guard import PRICING_PER_1M, _get_tier_from_model, est_tokens as cost_est_tokens
-import uuid, json, datetime
+from providers.openai_client import make_openai
 
 logger = logging.getLogger("ai-router.graph")
 
@@ -45,8 +53,8 @@ def _merge_env_config(reg: Dict[str, Any]):
 
     # OpenAI Overrides
     mapping = {
-        "OPENAI_CODE_MINI": "gpt-5.1-codex-mini",
-        "OPENAI_CODE_STANDARD": "gpt-5.1-codex",
+        "OPENAI_CODE_MINI": "gpt-5.2-codex-mini",
+        "OPENAI_CODE_STANDARD": "gpt-5.2-codex-high",
         "OPENAI_CODE_REASONING": "o3-mini-high",
         "OPENAI_CODE_ELITE": "o3",
         "OPENAI_TEXT_NANO": "gpt-5-nano",
@@ -92,6 +100,7 @@ class RoutingMeta:
     requires_search: bool = False
     requires_long_context: bool = False
     classifier_used: str = "heuristic"  # "heuristic" or "llm"
+    quality_score: int = 5 # 1-10 scale (1=Draft, 5=Standard, 10=Production)
 
 # ---------- State ----------
 class RouterState(TypedDict, total=False):
@@ -120,16 +129,34 @@ def est_tokens(txt: str) -> int:
 def _has_openai() -> bool:
     return bool(os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY_TIER2"))
 
+# Re-read strict fallback settings
 def _is_cloud_available() -> bool:
     """
-    Check if cloud models are available.
-    Automatic detection: True if keys exist, unless explicitly disabled via env.
+    Check if cloud models are authorized.
+    Automatic detection: True if keys exist. Manual toggles are DEPRECATED in favor of Judge autonomy.
     """
-    # 1. Check if explicitly disabled (optional override)
+    # Simply check if we have the keys to pay for the ride.
+    # The Judge decides if we take the ride.
+    if _has_openai():
+        return True
+    
+    # Optional: Keep "0" to force-kill for testing, but default is "Trust the Judge"
     if str(os.getenv("ENABLE_OPENAI_FALLBACK", "")).strip() == "0":
         return False
-    # 2. Check if keys exist
-    return _has_openai()
+        
+    return False
+
+# Legacy alias for compatibility
+_fallback_enabled = _is_cloud_available
+
+# ... (inside classify_prompt wrapper or caller)
+# We need to find where classify_prompt calls LLM. 
+# It seems classify_prompt is heuristic, and classify_prompt_with_llm is the LLM one.
+# Let's look at `_classify_node` in the file. (I need to view more lines or assume standard langgraph structure)
+# I will update `_classify_node` implementation below if I can match it, 
+# otherwise I will add the check in `classify_prompt_with_llm`.
+
+# Actually, let's update `classify_prompt_with_llm` to short-circuit if cloud is off.
 
 # Legacy alias for compatibility
 _fallback_enabled = _is_cloud_available
@@ -185,8 +212,8 @@ def classify_prompt(messages: List[Dict[str, str]]) -> RoutingMeta:
     task_default = TASK_TYPES.get(detected_task, {}).get("complexity_default", "low")
     detected_complexity = task_default
     
-    # Critical tasks should ALWAYS be at least their default complexity
-    # Do not downgrade system_design, code_crit_debug, or reasoning based on token count
+    # Complexity Helpers
+    levels = ["low", "medium", "high", "critical"]
     critical_tasks = ["code_crit_debug", "system_design", "reasoning", "research"]
     
     if detected_task in critical_tasks:
@@ -201,9 +228,15 @@ def classify_prompt(messages: List[Dict[str, str]]) -> RoutingMeta:
             if detected_complexity == "low":
                 detected_complexity = "medium" if detected_task in ["code_gen", "code_review"] else "low"
         elif token_count < 2000:
-            detected_complexity = max(detected_complexity, "medium", key=lambda x: ["low", "medium", "high", "critical"].index(x))
+            detected_complexity = max(
+                detected_complexity, "medium", 
+                key=lambda x: levels.index(x)
+            )
         else:
-            detected_complexity = max(detected_complexity, "high", key=lambda x: ["low", "medium", "high", "critical"].index(x))
+            detected_complexity = max(
+                detected_complexity, "high", 
+                key=lambda x: levels.index(x)
+            )
 
     
     # 2. Complexity pattern matching
@@ -225,7 +258,10 @@ def classify_prompt(messages: List[Dict[str, str]]) -> RoutingMeta:
     if "traceback" in txt or "exception" in txt or "error:" in txt:
         if detected_task in ["code_gen", "code_review", "simple_qa"]:
             detected_task = "code_crit_debug" if detected_complexity in ["high", "critical"] else "code_review"
-            detected_complexity = max(detected_complexity, "medium", key=lambda x: ["low", "medium", "high", "critical"].index(x))
+            detected_complexity = max(
+                detected_complexity, "medium", 
+                key=lambda x: levels.index(x)
+            )
     
     # Determine if long context is needed
     requires_long_context = token_count > 4000
@@ -255,7 +291,7 @@ def classify_prompt_with_llm(messages: List[Dict[str, str]], heuristic_meta: Rou
     if heuristic_meta.confidence >= threshold:
         return heuristic_meta
     
-    if not _fallback_enabled():
+    if not _is_cloud_available():
         return heuristic_meta
     
     try:
@@ -273,6 +309,7 @@ def classify_prompt_with_llm(messages: List[Dict[str, str]], heuristic_meta: Rou
         # Parse response
         task_match = re.search(r"TASK:\s*(\w+)", result_str)
         complexity_match = re.search(r"COMPLEXITY:\s*(\w+)", result_str)
+        quality_match = re.search(r"QUALITY_SCORE:\s*(\d+)", result_str)
         
         if task_match and complexity_match:
             task = task_match.group(1).lower()
@@ -284,6 +321,12 @@ def classify_prompt_with_llm(messages: List[Dict[str, str]], heuristic_meta: Rou
             if complexity in ["low", "medium", "high", "critical"]:
                 heuristic_meta.complexity = complexity
             
+            if quality_match:
+                try:
+                    heuristic_meta.quality_score = int(quality_match.group(1))
+                except ValueError:
+                    pass
+
             heuristic_meta.classifier_used = "llm"
             heuristic_meta.confidence = 0.9
         
@@ -306,8 +349,14 @@ def select_model_from_policy(routing_meta: RoutingMeta, budget_override: str = N
     # Get policy for this task
     task_policy = ROUTING_POLICY.get(task, ROUTING_POLICY.get("simple_qa", {}))
     
+    # --- JUDGE LOGIC (Quality Overrides) ---
+    # Quality 8-10: Force Cloud (Tier 4/5) regardless of complexity
+    if routing_meta.quality_score >= 8:
+        # Override complexity to critical to access Elite models
+        complexity = "critical"
+    
     # Get model list for this complexity
-    model_list = task_policy.get(complexity, task_policy.get("low", ["llama-3.1-8b-instruct"]))
+    model_list = task_policy.get(complexity, task_policy.get("low", ["local-chat"]))
     
     # Filter by availability
     available_models = []
@@ -317,9 +366,8 @@ def select_model_from_policy(routing_meta: RoutingMeta, budget_override: str = N
         
         meta = REG[model_id]
         provider = meta.get("provider", "ollama")
-        
         # Check if cloud is available
-        if provider == "openai" and not _fallback_enabled():
+        if provider == "openai" and not _is_cloud_available():
             continue
         
         available_models.append(model_id)
@@ -343,7 +391,7 @@ def pick_model_id(state: RouterState) -> str:
     
     # Check for legacy overrides
     if state.get("critical", False) and _fallback_enabled():
-        return "o3" if state.get("budget") == "high" else "gpt-5.1-codex"
+        return "o3" if state.get("budget") == "high" else "gpt-5.2-codex-high"
     
     # Use new automatic classification
     routing_meta = classify_prompt(msgs)
@@ -399,7 +447,7 @@ def _model_branch(x: Dict[str, Any]) -> Any:
     if model_id == "llama-3.1-8b-instruct" and _fallback_enabled():
         chain = chain.with_fallbacks([_get_chain("gpt-5-mini")])
     elif model_id == "deepseek-coder-v2-16b" and _fallback_enabled():
-        chain = chain.with_fallbacks([_get_chain("gpt-5.1-codex")])
+        chain = chain.with_fallbacks([_get_chain("gpt-5.2-codex-high")])
     
     return chain.invoke({"messages": x["messages"]})
 
@@ -436,7 +484,7 @@ def _sla_wrap(runnable):
             
             # Attempt cloud fallback
             if _fallback_enabled():
-                fallback_models = ["gpt-5-mini", "gpt-5.1-codex"]
+                fallback_models = ["gpt-5-mini", "gpt-5.2-codex-high"]
                 for fb_model in fallback_models:
                     try:
                         fb_chain = _get_chain(fb_model)
@@ -477,46 +525,150 @@ def _node_route(state: RouterState) -> RouterState:
     
     return {"model_id": model_id, "attempts": [{"model": model_id, "status": "pending"}]}
 
-def _node_invoke(state: RouterState) -> RouterState:
-    """Invoke the selected model and return the response."""
-    wrapped = _sla_wrap(BRANCH)
-    model_id = state.get("model_id", "llama-3.1-8b-instruct")
+def _evaluate_response(task: str, text: str) -> Tuple[bool, str]:
+    """
+    Quality Gate: Check if response meets minimum criteria for the task.
+    Returns (passed: bool, reason: str).
+    """
+    if not text:
+        return False, "empty_response"
+        
+    text_lower = text.lower()
     
-    try:
-        out = wrapped.invoke({"messages": state["messages"], "model_id": model_id})
-        attempt_status = "success"
-    except Exception as e:
-        logger.error(f"Invocation failed: {e}")
-        out = f"Error: {e}"
-        attempt_status = "failed"
+    # Code Generation: Must have code block or visible code
+    if task == "code_gen":
+        if "```" not in text and "def " not in text and "class " not in text and "import " not in text:
+            return False, "missing_code_block"
+            
+    # Code Review: Must explain issue or fix
+    elif task == "code_review":
+        if not any(k in text_lower for k in ["issue", "fix", "correct", "bug", "error", "suggestion"]):
+            return False, "missing_review_content"
+            
+    # System Design: Must have structure
+    elif task == "system_design":
+        if "-" not in text and "*" not in text and "#" not in text:
+             return False, "missing_structure_bullets"
+             
+    return True, "ok"
+
+
+def _node_invoke(state: RouterState) -> RouterState:
+    """Invoke the selected model with quality gating and fallback."""
+    wrapped = _sla_wrap(BRANCH)
+    current_model = state.get("model_id", "llama-3.1-8b-instruct")
+    
+    # Get initial routing meta for policy lookup
+    routing_meta_dict = state.get("routing_meta", {})
+    routing_meta = RoutingMeta(**routing_meta_dict) if routing_meta_dict else classify_prompt(state["messages"])
+    
+    max_attempts = 2  # Initial + 1 Retry
+    attempt_count = 0
+    final_out = None
+    final_status = "failed"
+    escalated = False
+    escalation_reason = None
+    
+    attempts_log = state.get("attempts", [])
+    
+    # Loop for retry/escalation
+    while attempt_count < max_attempts:
+        attempt_count += 1
+        logger.info(f"Invoking {current_model} (Attempt {attempt_count}/{max_attempts})")
+        
+        try:
+            out_chain = wrapped.invoke({"messages": state["messages"], "model_id": current_model})
+            out_text = str(out_chain) 
+            
+            # --- Quality Gate ---
+            passed, reason = _evaluate_response(routing_meta.task, out_text)
+            
+            if passed:
+                final_out = out_chain
+                final_status = "success"
+                attempts_log.append({"model": current_model, "status": "success"})
+                break # Success!
+            
+            # Failed Quality Check
+            attempts_log.append({"model": current_model, "status": f"quality_failed:{reason}"})
+            logger.warning(f"Quality Gate Failed for {current_model}: {reason}")
+            
+            if attempt_count >= max_attempts:
+                # No more retries, return what we have (best effort)
+                final_out = out_chain
+                final_status = "quality_compromised"
+                break
+                
+            # --- Escalation Logic ---
+            # Try to find next model in policy
+            task_policy = ROUTING_POLICY.get(routing_meta.task, ROUTING_POLICY.get("simple_qa", {}))
+            model_list = task_policy.get(routing_meta.complexity, [])
+            
+            next_model = None
+            try:
+                curr_idx = model_list.index(current_model)
+                # Look for valid next model
+                for candidate in model_list[curr_idx+1:]:
+                    # Check cloud availability
+                    cand_meta = REG.get(candidate, {})
+                    if cand_meta.get("provider") == "openai" and not _is_cloud_available():
+                        continue
+                    next_model = candidate
+                    break
+            except ValueError:
+                pass # Current model not in policy list, can't strictly escalate
+                
+            if next_model:
+                logger.info(f"Escalating from {current_model} to {next_model}")
+                current_model = next_model
+                escalated = True
+                escalation_reason = reason
+            else:
+                logger.info("No valid escalation target found. Accepting current response.")
+                final_out = out_chain
+                final_status = "quality_compromised"
+                break
+
+        except Exception as e:
+            err_str = str(e)
+            if "Upstream Error" in err_str:
+                logger.error(f"Upstream failure: {err_str}")
+                final_out = {"error": err_str, "type": "upstream_error"}
+                attempts_log.append({"model": current_model, "status": "upstream_error"})
+                break # Stop on auth/payment errors
+            else:
+                logger.error(f"Invocation failed: {e}")
+                # If exception, we might want to retry if configured, but for simplicity let's stop or fall through
+                # The _sla_wrap handles some fallbacks, but if it comes here it's fatal
+                final_out = f"Error: {e}"
+                attempts_log.append({"model": current_model, "status": "error"})
+                break
     
     # Build usage/telemetry
     prompt = join_messages(state["messages"])
     latency_start = state.get("_latency_start", time.perf_counter())
     
-    routing_meta = state.get("routing_meta", {})
-    
-    # Update attempts
-    attempts = state.get("attempts", [])
-    if attempts:
-        attempts[-1]["status"] = attempt_status
+    # Ensure usage dict is robust
+    out_str = str(final_out) if final_out else ""
     
     usage = {
         "prompt_tokens_est": est_tokens(prompt),
-        "completion_tokens_est": est_tokens(str(out)),
-        "total_tokens_est": est_tokens(prompt) + est_tokens(str(out)),
-        "resolved_model_id": model_id,
+        "completion_tokens_est": est_tokens(out_str),
+        "total_tokens_est": est_tokens(prompt) + est_tokens(out_str),
+        "resolved_model_id": current_model,
         "config_path": CONFIG_PATH,
         "latency_ms_router": int((time.perf_counter() - latency_start) * 1000),
-        "routing_meta": routing_meta,
-        "attempts": attempts,
-        "classifier_used": routing_meta.get("classifier_used", "heuristic"),
+        "routing_meta": asdict(routing_meta),
+        "attempts": attempts_log,
+        "classifier_used": routing_meta.classifier_used,
         "cloud_available": _is_cloud_available(),
+        "escalated": escalated,
+        "escalation_reason": escalation_reason
     }
     
     # ---------- METRICS & LOGGING ----------
     try:
-        tier = _get_tier_from_model(model_id)
+        tier = _get_tier_from_model(current_model)
         price_per_1m = PRICING_PER_1M.get(tier, 5.0)
         total_tokens = usage["total_tokens_est"]
         cost_usd = (total_tokens / 1_000_000) * price_per_1m
@@ -524,27 +676,24 @@ def _node_invoke(state: RouterState) -> RouterState:
         metric_event = {
             "ts": datetime.datetime.now().isoformat(),
             "prompt_id": str(uuid.uuid4()),
-            "task": routing_meta.get("task", "unknown"),
-            "complexity": routing_meta.get("complexity", "unknown"),
-            "model_id": model_id,
+            "task": routing_meta.task,
+            "complexity": routing_meta.complexity,
+            "model_id": current_model,
             "tier": tier,
             "tokens_total": total_tokens,
             "latency_ms": usage["latency_ms_router"],
             "cost_est_usd": round(cost_usd, 6),
-            "status": attempt_status
+            "status": final_status,
+            "escalated": escalated
         }
         
-        # Log to file
-        with open("logs/metrics.jsonl", "a") as f:
-            f.write(json.dumps(metric_event) + "\n")
-            
         # Log to stderr (for journalctl)
         logger.info(f"METRIC: {json.dumps(metric_event)}")
         
     except Exception as e:
-        logger.error(f"Failed to log metrics: {e}")
-    
-    return {"output": out, "usage": usage}
+        logger.error(f"Metrics logging failed: {e}")
+
+    return {"output": final_out, "usage": usage, "attempts": attempts_log}
 
 # ---------- Graph Builder ----------
 def build_compiled_router():

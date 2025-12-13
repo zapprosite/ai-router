@@ -1,59 +1,43 @@
-# System Architecture
+# ai-router Architecture
 
-The AI Router acts as an intelligent gateway, sitting between your applications and various AI models. It makes real-time decisions to optimize for cost, quality, and speed.
-
-## High-Level Data Flow
+## 🧠 The "Autonomous Judge" Logic
+The core differentiator of this router is the **Autonomous Judge** (Classifier + Logic). Instead of simple load balancing, it evaluates the *intent* and *expertise* required for each prompt.
 
 ```mermaid
-graph TD
-    User[User / App] -->|Request| API[AI Router API :8087]
+flowchart LR
+    User[User Prompt] --> Judge{The Autonomous Judge}
     
-    subgraph "Decision Engine"
-        API --> Class[Classifier (Heuristic/LLM)]
-        Class -->|Simple Task| LocalRoute
-        Class -->|Complex Task| CloudRoute
-        Class -->|Critical Code| EliteRoute
+    Judge -- "Easy / Safe / Code" --> Local[Local GPU (RTX 4090)]
+    Judge -- "Critical / ML / Reasoning" --> Cloud[Cloud API (OpenAI)]
+    
+    subgraph Local [Cost: $0/token]
+        DeepSeek[DeepSeek-V2\n(The Engineer)]
+        Llama[Llama-3.1\n(The Assistant)]
     end
     
-    subgraph "Tier 1: Local (Free)"
-        LocalRoute --> Llama[Llama 3.1 8B]
-        LocalRoute --> Deep[DeepSeek Coder]
+    subgraph Cloud [Cost: $$$]
+        O3[O3\n(The Scientist)]
+        GPT[GPT-5.2\n(The Writer)]
     end
-    
-    subgraph "Tier 3: Cloud Balanced"
-        CloudRoute --> GPT4[GPT-4.1 / 4o-mini]
-    end
-    
-    subgraph "Tier 5: Elite (2025)"
-        EliteRoute --> GPT5[GPT-5.1 Codex]
-        EliteRoute --> O3[O3 Reasoning]
-    end
-    
-    Llama -->|Response| API
-    Deep -->|Response| API
-    GPT4 -->|Response| API
-    GPT5 -->|Response| API
 ```
 
-## Core Components
+## ⚖️ The Expertise Matrix (Decision Logic)
+The Judge selects models based on their verified strengths (Dec 2025):
 
-### 1. The Classifier
-The router analyzes every incoming prompt. It looks for:
-- **Keywords**: "traceback", "system design", "write code".
-- **Complexity**: Length of input, number of turns.
-- **Intent**: Is this a casual chat or a production outage?
+| Role | Model | Capabilities | Trigger Condition |
+| :--- | :--- | :--- | :--- |
+| **The Engineer** | `DeepSeek-Coder-V2` (Local) | Python, C++, Refactoring, Algorithms. | Default for `code_gen`, `code_review`. |
+| **The Assistant** | `Llama-3.1-8b` (Local) | Chitchat, JSON formatting, Summary. | Default for `simple_qa`, `chitchat`. |
+| **The Writer** | `GPT-5.2` (Cloud) | Creative writing, Marketing, Nuance. | `creative_writing`, `research` (High). |
+| **The Scientist** | `O3` (Cloud) | Math Proofs, Deadlock Analysis, Security. | `reasoning`, `critical` context. |
 
-### 2. The Routing Policy (`router_config.yaml`)
-Defined rules that determine where a prompt goes based on its classification.
-- **Low Complexity** -> Tier 1 (Local)
-- **Medium Complexity** -> Tier 3 (Cloud Balanced)
-- **High/Critical** -> Tier 5 (Elite)
+## 🛡️ Safety & Cost Guard
+- **Cost Guard**: Prevents accidental cloud usage for simple tasks.
+- **Privacy**: Local models run 100% offline.
+- **Reliability**: If Cloud fails, the router falls back to Local (DeepSeek/Llama).
 
-### 3. Stability Layer
-If a requested model (e.g., `gpt-5.1-codex`) is temporarily unavailable or if the API key lacks access, the Stability Layer transparently re-routes the request to the nearest equivalent (e.g., `gpt-4.1`). This ensures 100% uptime.
-
-### 4. Observability Layer
-The router provides deep visibility into usage and costs:
-- **Metrics Endpoint**: `/debug/metrics` provides real-time JSON stats (latency, cost, tokens).
-- **Structured Logs**: Requests are logged to `logs/metrics.jsonl` with a unique `prompt_id`.
-- **Cost Guard**: Estimates cost *before* execution and blocks queries that exceed the budget.
+## ⚙️ Configuration
+See `config/router_config.yaml` for:
+- Routing Policy Table.
+- Model Registry.
+- Budget Constraints.

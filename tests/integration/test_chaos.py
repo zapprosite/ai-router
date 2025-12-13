@@ -8,9 +8,9 @@ Tests that the router gracefully handles:
 """
 import os
 import sys
-import time
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.getcwd())
 
@@ -19,11 +19,11 @@ os.environ["ENABLE_OPENAI_FALLBACK"] = "1"
 os.environ["OPENAI_API_KEY"] = "sk-test-mock"
 
 from graph.router import (
+    SLA,
+    _fallback_enabled,
     build_compiled_router,
     classify_prompt,
     select_model_from_policy,
-    _fallback_enabled,
-    SLA,
 )
 
 
@@ -76,7 +76,7 @@ def test_policy_selection_with_unavailable_models():
     from graph.router import RoutingMeta
     
     # Test with cloud disabled
-    with patch("graph.router._fallback_enabled", return_value=False):
+    with patch("graph.router._is_cloud_available", return_value=False):
         meta = RoutingMeta(task="code_crit_debug", complexity="critical")
         model = select_model_from_policy(meta)
         # Should fall back to local model

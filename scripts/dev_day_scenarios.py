@@ -10,9 +10,8 @@ This is a read-only client script: it only calls the router's OpenAI-compatible
 shim at /v1/chat/completions (model: router-auto) and prints the resolved model.
 """
 import os
-import sys
 import time
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import requests
 

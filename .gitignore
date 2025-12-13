@@ -12,6 +12,16 @@ Thumbs.db
 .local/
 
 ########################################
+# Logs and Dumps
+########################################
+*.log
+*.jsonl
+.reports/
+.taskmaster/
+.codex/
+.mcp-debug-tools/
+
+########################################
 # Python
 ########################################
 __pycache__/
@@ -89,6 +99,7 @@ docker-compose.yml.bak.*
 config/.env.*
 !config/.env.example
 !config/.env.def
+!config/.env.local.example
 
 ########################################
 # Node (se usado em testes auxiliares)

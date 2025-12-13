@@ -6,8 +6,6 @@ Tests for:
 - Public routes accessibility
 - Basic routing logic
 """
-import pytest
-from fastapi.testclient import TestClient
 
 
 class TestAPIKeySecurity:
@@ -30,6 +28,62 @@ class TestAPIKeySecurity:
             headers=wrong_auth_headers
         )
         assert response.status_code == 401
+
+    def test_route_with_bearer_token_returns_200(self, client):
+        """Calling /route with valid Bearer token should return 200."""
+        # Mock auth
+        import os
+        key = os.getenv("AI_ROUTER_API_KEY")
+        headers = {"Authorization": f"Bearer {key}"}
+        
+        # Mock router
+        from app import main as m
+        class DummyRouter:
+            def invoke(self, state):
+                return {
+                    "output": "Test response",
+                    "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
+                }
+        original_router = m.router_app
+        m.router_app = DummyRouter()
+        
+        try:
+            response = client.post(
+                "/route",
+                json={"messages": [{"role": "user", "content": "Hello"}]},
+                headers=headers
+            )
+            assert response.status_code == 200
+        finally:
+            m.router_app = original_router
+
+    def test_route_with_raw_auth_token_returns_200(self, client):
+        """Calling /route with raw Authorization token should return 200."""
+        # Mock auth
+        import os
+        key = os.getenv("AI_ROUTER_API_KEY")
+        headers = {"Authorization": key}
+
+        # Mock router
+        from app import main as m
+        class DummyRouter:
+            def invoke(self, state):
+                return {
+                    "output": "Test response",
+                    "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
+                }
+        original_router = m.router_app
+        m.router_app = DummyRouter()
+        
+        try:
+            response = client.post(
+                "/route",
+                json={"messages": [{"role": "user", "content": "Hello"}]},
+                headers=headers
+            )
+            assert response.status_code == 200
+        finally:
+            m.router_app = original_router
 
     def test_route_with_valid_api_key_returns_200(self, client, auth_headers):
         """Calling /route with valid X-API-Key should return 200."""
@@ -232,3 +286,158 @@ class TestDebugEndpoints:
         response = client.get("/debug/metrics", headers=auth_headers)
         # May return error if no logs, but should NOT be 401
         assert response.status_code != 401
+
+
+class TestResponsesAPI:
+    """Tests for OpenAI Responses API endpoint (/v1/responses)."""
+
+    def test_responses_auth_required(self, client):
+        """/v1/responses should require authentication."""
+        response = client.post("/v1/responses", json={"model": "router-auto", "input": "hi"})
+        assert response.status_code == 401
+
+    def test_responses_with_string_input(self, client, auth_headers):
+        """/v1/responses should accept string input and return correct format."""
+        from app import main as m
+        
+        # Mock router
+        class DummyRouter:
+            def invoke(self, state):
+                return {
+                    "output": "Responses API OK",
+                    "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
+                }
+        original_router = m.router_app
+        m.router_app = DummyRouter()
+
+        try:
+            response = client.post(
+                "/v1/responses",
+                json={"model": "router-auto", "input": "Hello"},
+                headers=auth_headers
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["object"] == "response"
+            assert isinstance(data["output"], list)
+            assert len(data["output"]) > 0
+            assert data["output"][0]["role"] == "assistant"
+            assert data["output"][0]["type"] == "message"
+            # Check content structure: [{"type": "output_text", "text": "..."}]
+            content = data["output"][0]["content"]
+            assert isinstance(content, list)
+            assert content[0]["type"] == "output_text"
+            assert content[0]["text"] == "Responses API OK"
+        finally:
+            m.router_app = original_router
+
+    def test_responses_with_codex_style_input(self, client, auth_headers):
+        """/v1/responses should accept Codex CLI format with content as array."""
+        from app import main as m
+        
+        # Mock router
+        class DummyRouter:
+            def invoke(self, state):
+                # Verify that messages were normalized correctly
+                assert len(state["messages"]) > 0
+                assert state["messages"][0]["role"] == "user"
+                assert "Hello Codex" in state["messages"][0]["content"]
+                return {
+                    "output": "Codex Format OK",
+                    "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
+                }
+        original_router = m.router_app
+        m.router_app = DummyRouter()
+
+        try:
+            # Codex-style input format
+            codex_input = [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello Codex"}]
+                }
+            ]
+            response = client.post(
+                "/v1/responses",
+                json={"model": "router-auto", "input": codex_input},
+                headers=auth_headers
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["output"][0]["content"][0]["text"] == "Codex Format OK"
+        finally:
+            m.router_app = original_router
+
+    def test_responses_with_message_list_input(self, client, auth_headers):
+        """/v1/responses should accept simple list of messages as input."""
+        from app import main as m
+        
+        # Mock router
+        class DummyRouter:
+            def invoke(self, state):
+                return {
+                    "output": "Responses List OK",
+                    "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
+                }
+        original_router = m.router_app
+        m.router_app = DummyRouter()
+
+        try:
+            input_msgs = [{"role": "user", "content": "Hello"}]
+            response = client.post(
+                "/v1/responses",
+                json={"model": "router-auto", "input": input_msgs},
+                headers=auth_headers
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["output"][0]["content"][0]["text"] == "Responses List OK"
+        finally:
+            m.router_app = original_router
+
+    def test_responses_validation_error(self, client, auth_headers):
+        """Missing required fields should return 422 (FastAPI default) or 400."""
+        # Missing model
+        response = client.post(
+            "/v1/responses",
+            json={"input": "missing model"},
+            headers=auth_headers
+        )
+        assert response.status_code == 422  # Pydantic validation error
+
+        # Missing input
+        response = client.post(
+            "/v1/responses",
+            json={"model": "router-auto"},
+            headers=auth_headers
+        )
+        assert response.status_code == 422
+
+    def test_responses_upstream_402_error(self, client, auth_headers):
+        """Router returning upstream 402 should result in API 402."""
+        from app import main as m
+        # We don't import HTTPException here as it's not needed for the test logic itself,
+        # but the router code uses it.
+        
+        # Mock router to return specific upstream error
+        class ErrorRouter:
+            def invoke(self, state):
+                return {
+                    "output": "Error",
+                    "type": "upstream_error",
+                    "error": "Upstream Error 402: deactivated_workspace"
+                }
+        original_router = m.router_app
+        m.router_app = ErrorRouter()
+
+        try:
+            response = client.post(
+                "/v1/responses",
+                json={"model": "router-auto", "input": "hi"},
+                headers=auth_headers
+            )
+            assert response.status_code == 402
+            assert "deactivated_workspace" in response.text
+        finally:
+            m.router_app = original_router

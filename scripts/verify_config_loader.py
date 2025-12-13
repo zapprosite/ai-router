@@ -13,8 +13,9 @@ os.environ["ENABLE_COST_PROTECTION"] = "1"
 # Add root to path
 sys.path.insert(0, os.getcwd())
 
-from graph.router import REG, SLA, _sla_wrap
 from graph.cost_guard import check_cost_limit
+from graph.router import REG
+
 
 class TestDefinitiveConfig(unittest.TestCase):
     
