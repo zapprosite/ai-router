@@ -1,6 +1,6 @@
 import os
-import requests
 
+import requests
 
 BASE = os.getenv("AI_ROUTER_BASE", "http://localhost:8082").rstrip("/")
 

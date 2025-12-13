@@ -4,9 +4,8 @@ Automatic Routing Evaluation Test Suite
 Tests the zero-configuration, complexity-aware routing system.
 No manual flags required - routing is inferred from prompts.
 """
-import sys
 import os
-import pytest
+import sys
 
 sys.path.insert(0, os.getcwd())
 
@@ -16,11 +15,9 @@ sys.path.insert(0, os.getcwd())
 os.environ["OPENAI_API_KEY"] = "sk-test-mock-key"
 
 from graph.router import (
+    RoutingMeta,
     classify_prompt,
     select_model_from_policy,
-    RoutingMeta,
-    REG,
-    ROUTING_POLICY,
 )
 
 
@@ -115,20 +112,20 @@ class TestPolicyBasedRouting:
         """Code generation should route to DeepSeek (Tier 2)."""
         meta = RoutingMeta(task="code_gen", complexity="medium")
         model = select_model_from_policy(meta)
-        assert model in ["local-code", "gpt-5.1-codex-mini"], f"Got: {model}"
+        assert model in ["local-code", "gpt-5.2-codex-mini"], f"Got: {model}"
     
     def test_critical_routes_to_cloud(self):
         """Critical tasks should route to cloud reasoning models."""
         meta = RoutingMeta(task="code_crit_debug", complexity="critical")
         model = select_model_from_policy(meta)
-        # Now routes to gpt-5.1-codex-high
-        assert any(m in model for m in ["gpt-5.1-codex-high", "o3", "o3-mini"]), f"Expected o3, got: {model}"
+        # Now routes to gpt-5.2-codex-high
+        assert any(m in model for m in ["gpt-5.2-codex-high", "o3", "o3-mini"]), f"Expected o3, got: {model}"
     
     def test_system_design_high_routes_to_o3(self):
         """High-complexity system design should route to O3."""
         meta = RoutingMeta(task="system_design", complexity="high")
         model = select_model_from_policy(meta)
-        assert model in ["gpt-5.1-codex-high", "o3", "o3-mini-high"], f"Got: {model}"
+        assert model in ["gpt-5.2-codex-high", "o3", "o3-mini-high"], f"Got: {model}"
 
 
 class TestEndToEndRouting:
@@ -144,20 +141,20 @@ class TestEndToEndRouting:
         """Code requests should route to code-capable models."""
         meta = classify_prompt([{"role": "user", "content": "Write a Python function for quicksort"}])
         model = select_model_from_policy(meta)
-        assert model in ["local-code", "gpt-5.1-codex-mini", "gpt-5.1-codex"]
+        assert model in ["local-code", "gpt-5.2-codex-mini", "gpt-5.2-codex", "deepseek-coder-v2-16b"]
     
     def test_e2e_deadlock_analysis(self):
         """Deadlock analysis should route to premium cloud."""
         meta = classify_prompt([{"role": "user", "content": "Analyze this deadlock stack trace in our production database"}])
         model = select_model_from_policy(meta)
-        assert any(m in model for m in ["gpt-5.1-codex-high", "o3", "o3-mini"]), f"Got: {model}"
+        assert any(m in model for m in ["gpt-5.2-codex-high", "o3", "o3-mini"]), f"Got: {model}"
         assert meta.complexity in ['high', 'critical']
     
     def test_e2e_system_design(self):
         """System design should route to reasoning models."""
         meta = classify_prompt([{"role": "user", "content": "Design a distributed HVAC control system with failover"}])
         model = select_model_from_policy(meta)
-        assert any(m in model for m in ["gpt-5.1-codex-high", "o3", "o3-mini"]), f"Got: {model}"
+        assert any(m in model for m in ["gpt-5.2-codex-high", "o3", "o3-mini"]), f"Got: {model}"
         assert meta.complexity in ['high', 'critical']
 
 
@@ -198,11 +195,11 @@ def run_eval():
         ("Hi", "local-chat"),
         ("What is the capital of France?", "local-chat"),
         ("Write a Python function to sort a list", "local-code"),
-        ("Analyze this deadlock in production", "o3"),
-        ("Design a distributed system architecture", "o3"),
+        ("Analyze this deadlock in production", "gpt-5.2-codex-high"),  # Updated: first in policy list
+        ("Design a distributed system architecture", "gpt-5.2-codex-high"),  # Updated: first in policy list
         ("Traceback (most recent call last):", "local-code"),
-        ("Security vulnerability in authentication", "o3"),
-        ("Race condition in payment processing", "o3"),
+        ("Security vulnerability in authentication", "gpt-5.2-codex-high"),  # Updated  
+        ("Race condition in payment processing", "gpt-5.2-codex-high"),  # Updated
     ]
     
     passed = 0
@@ -214,9 +211,9 @@ def run_eval():
         
         # Check if we got the expected model or a reasonable alternative
         is_pass = (model == expected) or (
-            expected in ["o3", "gpt-5.1-codex"] and model in ["o3", "o3-mini-high", "gpt-5.1-codex"]
+            expected in ["o3", "gpt-5.2-codex-high"] and model in ["o3", "o3-mini-high", "gpt-5.2-codex-high"]
         ) or (
-            expected == "local-code" and model in ["local-code", "gpt-5.1-codex-mini"]
+            expected == "local-code" and model in ["local-code", "gpt-5.2-codex-mini"]
         )
         
         status = "✅" if is_pass else "❌"

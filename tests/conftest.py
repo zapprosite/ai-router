@@ -4,6 +4,7 @@ Provides TestClient with mocked API Key for security testing.
 """
 import os
 import sys
+
 import pytest
 from fastapi.testclient import TestClient
 

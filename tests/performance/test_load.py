@@ -4,13 +4,12 @@ Validates router performance under high concurrency (50-100 RPS).
 Target: Ensure router overhead is <200ms (excluding LLM latency).
 """
 import asyncio
-import os
-import time
-import httpx
-import pytest
-import statistics
-import json
 import logging
+import os
+import statistics
+import time
+
+import pytest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,9 +39,11 @@ async def test_router_overhead_under_load():
     Simulate multiple concurrent users hitting the decision engine.
     Pass condition: P95 Latency < 200ms, Error Rate < 1%.
     """
-    from app.main import app
-    from httpx import AsyncClient, ASGITransport
     from unittest.mock import patch
+
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import app
 
     # Mock the LLM classifier to avoid 401 retries and test pure router logic latency
     with patch("graph.router.classify_prompt_with_llm") as mock_llm:

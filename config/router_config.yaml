@@ -63,21 +63,21 @@ models:
     capabilities: ["reasoning", "system_design", "code_crit_debug", "research"]
 
   # === TIER 5: CLOUD ELITE (GPT-5.1 - 2025) ===
-  - id: gpt-5.1-high
+  - id: gpt-5.2-high
     provider: openai
-    name: "gpt-5.1-high"
+    name: "gpt-5.2-high"
     tier: 5
     capabilities: ["reasoning", "research", "creative_writing"]
 
-  - id: gpt-5.1-codex-mini
+  - id: gpt-5.2-codex-mini
     provider: openai
-    name: "gpt-5.1-codex-mini"
+    name: "gpt-5.2-codex-mini"
     tier: 5
     capabilities: ["code_gen", "code_review"]
 
-  - id: gpt-5.1-codex-high
+  - id: gpt-5.2-codex-high
     provider: openai
-    name: "gpt-5.1-codex-high"
+    name: "gpt-5.2-codex-high"
     tier: 5
     capabilities: ["code_crit_debug", "system_design", "refactoring"]
 
@@ -139,6 +139,17 @@ task_types:
     keywords: ["research", "compare", "analyze", "prove", "explain in detail"]
     complexity_default: "high"
   
+  # Machine Learning & AI
+  machine_learning:
+    description: "AI/ML model design, training, pytorch, tensorflow"
+    keywords: ["pytorch", "tensorflow", "transformer", "neural network", "training loop", "inference", "llm", "rag"]
+    complexity_default: "high"
+
+  cloud_architecture:
+    description: "Cloud native, kubernetes, terraform, aws, gcp"
+    keywords: ["kubernetes", "docker", "terraform", "aws", "gcp", "azure", "microservices", "helm"]
+    complexity_default: "high"
+
   reasoning:
     description: "Complex reasoning, logical puzzles, math proofs"
     keywords: ["prove", "derive", "why does", "step by step", "reasoning"]
@@ -166,94 +177,120 @@ complexity_signals:
 
 # ---------- ROUTING POLICY TABLE ----------
 # Maps (task, complexity) -> preferred model tiers
+# EXPERTISE MATRIX APPLIED:
+# - DeepSeek-V2 (Local 4090) -> King of Logics/Code
+# - GPT-5.2 (Cloud) -> Creative/Nuance
+# - O3 (Cloud) -> Math/Critical reasoning
 routing_policy:
-  # Chitchat / Simple
+  # Chitchat / Simple (Llama 3.1 Domain)
   chitchat:
     low: ["local-chat"]
-    medium: ["local-chat", "gpt-4o-mini"]
+    medium: ["local-chat"]
+    high: ["local-chat"]
   
   simple_qa:
     low: ["local-chat"]
-    medium: ["local-chat", "gpt-4o-mini"]
+    medium: ["local-chat"]
+    high: ["gpt-4o-mini"] # Cloud for slightly better knowledge base
   
   translation:
     low: ["local-chat"]
-    medium: ["local-chat", "gpt-4o-mini"]
-  
-  summary:
-    low: ["local-chat"]
     medium: ["local-chat"]
-    high: ["gpt-4o-mini", "gpt-4.1"]
+    high: ["gpt-4o-mini"]
   
-  # Code Tasks
+  # Code Tasks (DeepSeek Dominance - Local 4090)
   code_gen:
     low: ["local-code"]
-    medium: ["local-code", "gpt-4.1-mini"]
-    high: ["local-code", "gpt-4.1", "o3-mini"]
+    medium: ["local-code"]
+    high: ["local-code"]  # DeepSeek V2 is often superior to Mini models
+    critical: ["o3", "local-code"] # Only escalate to O3 if absolutely critical
   
   code_review:
     low: ["local-code"]
-    medium: ["local-code", "gpt-4.1-mini"]
-    high: ["local-code", "gpt-4.1"]
+    medium: ["local-code"]
+    high: ["local-code"]
+    critical: ["o3"]
   
   code_crit_debug:
-    low: ["local-code", "gpt-4.1"]
-    medium: ["local-code", "gpt-4.1", "o3-mini"]
-    high: ["gpt-5.1-codex-high", "o3", "o3-mini"]
-    critical: ["gpt-5.1-codex-high", "o3"]
+    low: ["local-code"]
+    medium: ["local-code"]
+    high: ["local-code"] # Try DeepSeek first
+    critical: ["o3"]     # If it's a deadlock/security issue, ask the PHD (O3)
   
-  # Design / Reasoning
+  # Specialized Domains
+  machine_learning:
+    low: ["local-code"]
+    medium: ["gpt-5.2-high"] # ML requires broad research context
+    high: ["o3"]             # Math heavy
+    critical: ["o3"]
+
+  cloud_architecture:
+    low: ["local-code"]
+    medium: ["gpt-5.2-high"]
+    high: ["o3"]
+    critical: ["o3"]
+
   system_design:
     low: ["local-code"]
-    medium: ["gpt-4.1"]
-    high: ["gpt-5.1-codex-high", "o3"]
-    critical: ["gpt-5.1-codex-high", "o3"]
-  
-  data_analysis:
-    low: ["local-code"]
-    medium: ["local-code", "gpt-4.1-mini"]
-    high: ["gpt-4.1"]
-  
+    medium: ["gpt-5.2-high"]
+    high: ["o3"]
+    critical: ["o3"]
+
+  # Creative / Research (GPT-5.2 Domain)
+  creative_writing: # New category implied
+    low: ["gpt-5.2-high"]
+    medium: ["gpt-5.2-high"]
+    high: ["gpt-5.2-high"]
+
   research:
-    low: ["local-chat"]
-    medium: ["gpt-4o-mini"]
-    high: ["gpt-5.1-high", "o1-pro"]
-    critical: ["gpt-5.1-high", "o3"]
+    low: ["gpt-4o-mini"]
+    medium: ["gpt-5.2-high"]
+    high: ["gpt-5.2-high"]
+    critical: ["o3"]
   
   reasoning:
-    low: ["local-chat"]
-    medium: ["gpt-4o-mini"]
-    high: ["gpt-5.1-high", "o3-mini"]
-    critical: ["gpt-5.1-high", "o3"]
+    low: ["gpt-4o-mini"]
+    medium: ["o3-mini"]
+    high: ["o3"]
+    critical: ["o3"]
 
 # ---------- CLASSIFIER SETTINGS ----------
 classifier:
   # Use LLM-assisted classification for ambiguous prompts
   llm_assisted: true
-  llm_model: "gpt-4.1-nano"
+  llm_model: "gpt-4o-mini" # Use a smart distinct judge model
   
   # Confidence threshold below which we invoke the LLM classifier
   heuristic_confidence_threshold: 0.7
   
-  # Template for LLM classifier
+  # Template for LLM classifier - THE AUTONOMOUS JUDGE
   prompt_template: |
-    Classify this user prompt into EXACTLY ONE task type and complexity level.
+    You are the AI Routing Judge (Autonomous). Your goal: Best Result at Best Price.
     
-    Task types: chitchat, simple_qa, translation, summary, code_gen, code_review, code_crit_debug, system_design, data_analysis, research, reasoning
+    # Model Expertise Matrix (Know your tools):
+    1. [Local-Code] DeepSeek-V2 (RTX 4090): "The Engineer". Excellent at Python, C++, Refactoring, Algorithms. FREE. Prefer this for ALL code unless you tried and failed.
+    2. [Local-Chat] Llama-3.1 (RTX 4090): "The Assistant". JSON, Summaries, Chat. FREE.
+    3. [Cloud-Creative] GPT-5.2: "The Writer". Creative writing, nuances, marketing, broad research. COSTLY.
+    4. [Cloud-Reasoning] O3: "The Scientist". Math proofs, Security Audits, Deadlocks, High-Stakes Logic. VERY COSTLY.
+
+    # Analysis
+    Analyze the prompt. Does it *Require* the Cloud Scientist? Or can the Local Engineer handle it?
     
-    Complexity levels: low, medium, high, critical
-    
-    Respond in this EXACT format (no markdown, no explanation):
-    TASK: <task_type>
-    COMPLEXITY: <level>
+    Respond in this EXACT format:
+    TASK: <task_type> (code_gen, machine_learning, reasoning, creative_writing, etc)
+    COMPLEXITY: <level> (low, medium, high, critical)
+    QUALITY_SCORE: <1-10> (1-7=Local Sufficient, 8-9=High Standard, 10=Mission Critical)
     
     User prompt:
     {prompt}
 
 # ---------- SLA & FALLBACK ----------
+# ---------- SLA & FALLBACK ----------
 sla:
   enabled: true
   latency_sec: 6
+  # Strict local-first: Cloud fallback must be explicitly enabled here OR via env
+  enable_cloud_fallback: true
   fallback_on_error: true
   retry_attempts: 2
 

@@ -5,7 +5,7 @@
 
 set -e
 
-PORT=8087
+PORT=8082
 TIMEOUT=5
 RED='\033[0;31m'
 GREEN='\033[0;32m'

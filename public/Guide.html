@@ -1,548 +1,380 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>MISSION CONTROL — AI Router</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@400;700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <title>AI Router — Command Center</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@700;900&family=Inter:wght@400;600;700&display=swap"
+        rel="stylesheet">
     <style>
         :root {
-            --bg: #030508;
-            --panel: #0a0f16;
-            --panel-border: #1a2533;
-            --accent: #00f0ff;
-            --accent-glow: rgba(0, 240, 255, 0.2);
-            --secondary: #7000ff;
-            --text-main: #e0f2fe;
+            --bg: #0a0e17;
+            --card: rgba(15, 23, 42, 0.8);
+            --card-border: rgba(100, 116, 139, 0.2);
+            --accent: #06b6d4;
+            --accent-glow: rgba(6, 182, 212, 0.3);
+            --success: #10b981;
+            --text: #f1f5f9;
             --text-dim: #94a3b8;
-            --success: #00ff9d;
-            --danger: #ff2a6d;
             --font-mono: "JetBrains Mono", monospace;
             --font-display: "Orbitron", sans-serif;
+            --font-body: "Inter", sans-serif;
         }
 
         * {
             box-sizing: border-box;
-            outline: none;
-            scrollbar-width: thin;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
             background: var(--bg);
-            color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            height: 100vh;
+            color: var(--text);
+            font-family: var(--font-body);
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(112, 0, 255, 0.05) 0%, transparent 20%),
-                radial-gradient(circle at 90% 80%, rgba(0, 240, 255, 0.05) 0%, transparent 20%);
+            align-items: center;
+            padding: 20px;
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
         }
 
-        /* Scrollbars */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #000; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
-
-        /* HUD Header */
+        /* Header */
         header {
-            height: 70px;
-            background: rgba(10, 15, 22, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--panel-border);
-            display: flex;
-            align-items: center;
-            padding: 0 30px;
-            justify-content: space-between;
-            z-index: 20;
-            box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+            text-align: center;
+            margin-bottom: 40px;
+            width: 100%;
+            max-width: 1200px;
         }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .brand h1 {
+        h1 {
             font-family: var(--font-display);
-            font-size: 24px;
-            margin: 0;
-            /* text-transform: uppercase; */
-            letter-spacing: 2px;
-            background: linear-gradient(90deg, #fff, var(--accent));
+            font-size: clamp(24px, 5vw, 42px);
+            background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 20px var(--accent-glow);
+            margin-bottom: 8px;
+            letter-spacing: 3px;
         }
 
-        .status-badge {
-            background: rgba(0, 255, 157, 0.1);
-            color: var(--success);
-            border: 1px solid var(--success);
-            padding: 4px 12px;
-            border-radius: 20px;
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 14px;
             font-family: var(--font-mono);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            box-shadow: 0 0 10px rgba(0, 255, 157, 0.2);
-            display: flex;
+        }
+
+        .status-live {
+            display: inline-flex;
             align-items: center;
             gap: 8px;
-        }
-        
-        .status-badge.offline {
-            border-color: var(--danger);
-            color: var(--danger);
-            background: rgba(255, 42, 109, 0.1);
-            box-shadow: 0 0 10px rgba(255, 42, 109, 0.2);
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+            padding: 6px 16px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 16px;
         }
 
         .pulse {
-            width: 8px; height: 8px; background: currentColor; border-radius: 50%;
-            animation: blink 2s infinite;
+            width: 8px;
+            height: 8px;
+            background: currentColor;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
         }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-        /* Layout */
-        main {
-            flex: 1;
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+        }
+
+        /* Grid */
+        .grid {
             display: grid;
-            grid-template-columns: 350px 1fr 300px; /* Sidebar | Terminal | Command Deck */
-            overflow: hidden;
-        }
-
-        /* Panels */
-        .panel {
-            background: rgba(10, 15, 22, 0.6);
-            border-right: 1px solid var(--panel-border);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .panel-header {
-            padding: 15px 20px;
-            border-bottom: 1px solid var(--panel-border);
-            font-family: var(--font-display);
-            font-size: 14px;
-            letter-spacing: 1px;
-            color: var(--accent);
-            text-transform: uppercase;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(0,0,0,0.2);
-        }
-
-        .panel-content {
-            padding: 20px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        /* Buttons & Controls */
-        .control-group {
-            margin-bottom: 25px;
-        }
-        .control-label {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            color: var(--text-dim);
-            margin-bottom: 10px;
-            display: block;
-            text-transform: uppercase;
-        }
-
-        button {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid var(--panel-border);
-            color: var(--text-main);
-            padding: 12px 16px;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
             width: 100%;
-            text-align: left;
-            cursor: pointer;
-            font-family: var(--font-mono);
-            font-size: 12px;
-            transition: all 0.2s;
-            margin-bottom: 8px;
-            border-radius: 4px;
+            max-width: 1200px;
+        }
+
+        /* Card */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 30px var(--accent-glow);
+            transform: translateY(-4px);
+        }
+
+        .card-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
         }
 
-        button:hover {
-            border-color: var(--accent);
-            background: rgba(0, 240, 255, 0.05);
-            box-shadow: 0 0 15px var(--accent-glow);
-            transform: translateX(2px);
-        }
-
-        button.primary {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: rgba(0, 240, 255, 0.05);
-        }
-        
-        button.danger {
-            border-color: var(--danger);
-            color: var(--danger);
-        }
-        
-        button.danger:hover {
-            box-shadow: 0 0 15px rgba(255, 42, 109, 0.2);
-            background: rgba(255, 42, 109, 0.05);
-        }
-
-        /* Terminal Window */
-        .terminal-container {
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-
-        .terminal-header {
+        .card-icon {
+            width: 40px;
             height: 40px;
-            background: #0a0f16;
-            border-bottom: 1px solid var(--panel-border);
+            background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+            border-radius: 12px;
             display: flex;
             align-items: center;
-            padding: 0 15px;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .card-title {
+            font-weight: 700;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        /* Command Box */
+        .cmd-box {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--accent);
+            word-break: break-all;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
             gap: 10px;
         }
 
-        .terminal-body {
+        .cmd-box code {
             flex: 1;
-            padding: 20px;
-            font-family: var(--font-mono);
-            font-size: 13px;
-            line-height: 1.6;
-            overflow-y: auto;
-            color: #dbeafe;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        
-        .log-entry { 
-            margin-bottom: 12px; 
-            border-left: 2px solid transparent; padding-left: 10px;
-            animation: slideIn 0.2s ease-out;
-        }
-        .log-entry:hover { border-left-color: var(--panel-border); background: rgba(255,255,255,0.02); }
-        
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
 
-        .method-badge {
-            font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 3px; margin-right: 8px;
-        }
-        .POST { background: #3b82f6; color: #fff; }
-        .GET { background: #10b981; color: #fff; }
-        .ERR { background: max(var(--danger)); color: #fff; }
-
-        /* JSON Highlight */
-        .key { color: #7dd3fc; }
-        .str { color: #a5f3fc; } /* Cyan-ish */
-        .num { color: #fbbf24; }
-        .bool { color: #f472b6; }
-
-        /* Cheat Sheet Panel (Right) */
-        .cheat-sheet {
-            background: #050a10;
-        }
-        
-        .cmd-item {
-            background: #0d131f;
-            border: 1px solid var(--panel-border);
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 10px;
-            transition: all 0.2s;
-        }
-        .cmd-item:hover {
-            border-color: var(--secondary);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-        
-        .cmd-display {
-            font-family: var(--font-mono);
-            font-size: 11px;
-            color: #94a3b8;
-            margin-bottom: 8px;
-            word-break: break-all;
-            display: block;
-        }
-        
+        /* Copy Button */
         .copy-btn {
+            background: linear-gradient(135deg, var(--accent) 0%, #0891b2 100%);
+            border: none;
+            color: #000;
+            font-weight: 700;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 12px;
             width: 100%;
-            padding: 6px;
-            font-size: 11px;
-            text-align: center;
-            justify-content: center;
-            background: rgba(112, 0, 255, 0.1);
-            color: #d8b4fe;
-            border: 1px solid rgba(112, 0, 255, 0.3);
-            margin: 0;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
+
         .copy-btn:hover {
-            background: rgba(112, 0, 255, 0.2);
-            border-color: var(--secondary);
-            color: #fff;
+            transform: scale(1.02);
+            box-shadow: 0 0 20px var(--accent-glow);
         }
+
         .copy-btn:active {
             transform: scale(0.98);
         }
 
+        .copy-btn.copied {
+            background: var(--success);
+        }
+
         /* Toast */
         #toast {
-            position: fixed; bottom: 30px; right: 30px;
-            background: var(--accent); color: #000;
-            padding: 10px 20px; border-radius: 4px;
-            font-weight: bold; font-family: var(--font-mono); font-size: 12px;
-            box-shadow: 0 0 20px var(--accent-glow);
-            transform: translateY(100px); opacity: 0;
-            transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--success);
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 1000;
         }
-        #toast.show { transform: translateY(0); opacity: 1; }
 
+        #toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 12px;
+            font-family: var(--font-mono);
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            body {
+                padding: 16px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                padding: 16px;
+            }
+        }
     </style>
 </head>
 
 <body>
-
     <header>
-        <div class="brand">
-            <h1>AI ROUTER <span style="font-size:12px; opacity:0.6; font-weight:400; font-family:var(--font-mono)">// V2.0</span></h1>
-        </div>
-        <div>
-            <div id="statusBadge" class="status-badge">
-                <div class="pulse"></div> SYSTEM ONLINE
-            </div>
+        <h1>AI ROUTER</h1>
+        <p class="subtitle">Command Center // Port 8082</p>
+        <div class="status-live" id="status">
+            <span class="pulse"></span>
+            <span>CHECKING...</span>
         </div>
     </header>
 
-    <main>
-        <!-- LEFT PANEL: Controls -->
-        <aside class="panel">
-            <div class="panel-header">
-                Interactive Controls
-                <span id="latencyDisplay" style="font-size:11px; color:var(--text-dim)">--ms</span>
-            </div>
-            <div class="panel-content">
-                
-                <div class="control-group">
-                    <label class="control-label">System Diagnostics</label>
-                    <button onclick="api.get('/healthz')">
-                        <span>Health Check</span>
-                        <span style="opacity:0.5">GET</span>
-                    </button>
-                    <button onclick="api.get('/debug/where')">
-                        <span>Debug Config</span>
-                        <span style="opacity:0.5">GET</span>
-                    </button>
-                    <button onclick="api.get('/v1/models')">
-                        <span>List Models</span>
-                        <span style="opacity:0.5">GET</span>
-                    </button>
-                </div>
+    <div class="grid" id="commands"></div>
 
-                <div class="control-group">
-                    <label class="control-label">Simulation (Smoke Tests)</label>
-                    <button class="primary" onclick="api.post('/actions/smoke')">
-                        <span>🔥 Run Full Smoke Test</span>
-                    </button>
-                    <button onclick="api.route('Simple Greeting', 'Hello there!')">
-                        <span>Simple Chat</span>
-                        <span style="font-size:10px; border:1px solid #ffffff33; padding:2px 4px; border-radius:3px">TIER 1</span>
-                    </button>
-                    <button onclick="api.route('Code Gen', 'Write a python fibonacci function', true)">
-                        <span>Code Task</span>
-                        <span style="font-size:10px; border:1px solid #ffffff33; padding:2px 4px; border-radius:3px">TIER 2</span>
-                    </button>
-                </div>
+    <footer>
+        <p>Built with 🚀 by AI Router Team — <a href="/docs" target="_blank">Documentation</a></p>
+    </footer>
 
-                <div class="control-group">
-                    <label class="control-label">Direct Model Invocations</label>
-                    <button onclick="api.test('gpt-5.1-high')">Test GPT-5.1 High</button>
-                    <button onclick="api.test('gpt-5.1-codex-high')">Test GPT-5.1 Codex</button>
-                    <button class="danger" onclick="api.test('o3')">Test O3 (Reasoning)</button>
-                </div>
-
-            </div>
-        </aside>
-
-        <!-- CENTER PANEL: Terminal -->
-        <section class="terminal-container">
-            <div class="terminal-header">
-                <span style="color:var(--accent); font-family:var(--font-display); letter-spacing:1px; font-size:12px">LIVE REQUEST STREAM</span>
-                <div style="flex:1"></div>
-                <button onclick="document.getElementById('terminal').innerHTML = ''" style="width:auto; padding:4px 8px; margin:0; font-size:10px">CLEAR</button>
-            </div>
-            <div id="terminal" class="terminal-body">
-                <div style="color:var(--text-dim); text-align:center; padding-top:50px; font-style:italic">
-                    // Awaiting Incoming Signals...
-                </div>
-            </div>
-        </section>
-
-        <!-- RIGHT PANEL: Command Deck -->
-        <aside class="panel cheat-sheet">
-            <div class="panel-header">
-                Command Deck
-            </div>
-            <div class="panel-content" id="cmdContainer">
-                <!-- Commands injected by JS -->
-            </div>
-        </aside>
-    </main>
-
-    <!-- Toast Notification -->
-    <div id="toast">COMMAND COPIED TO CLIPBOARD</div>
+    <div id="toast">✓ Copied to clipboard!</div>
 
     <script>
-        // --- CONFIG & STATE ---
-        const BASE = '';
         const COMMANDS = [
-            { label: "Start Server (Dev)", cmd: "make dev" },
-            { label: "Run Smoke Test (CLI)", cmd: "make smoke" },
-            { label: "Check Server Status", cmd: "curl -s http://localhost:8087/healthz | jq" },
-            { label: "View Live Logs", cmd: "make logs" },
-            { label: "Install Secrets", cmd: "sudo tee config/.env.local < .env.example" },
-            { label: "Restart Service", cmd: "make restart" },
-            { label: "Test Routing (Curl)", cmd: `curl -X POST http://localhost:8087/route -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"Hello"}]}'` }
+            { icon: "🚀", title: "Start Development", desc: "Start FastAPI server with hot-reload", cmd: "make dev" },
+            { icon: "✅", title: "Full Verification", desc: "Run all tests and validations", cmd: "make verify" },
+            { icon: "💨", title: "Smoke Test", desc: "Quick validation of routing logic", cmd: "make smoke" },
+            { icon: "🔄", title: "Restart Service", desc: "Restart systemd service", cmd: "make restart" },
+            { icon: "📊", title: "View Logs", desc: "Show recent service logs", cmd: "make logs" },
+            { icon: "🔍", title: "Service Status", desc: "Check systemd service status", cmd: "make status" },
+            { icon: "☁️", title: "Cloud Status", desc: "Check cloud fallback configuration", cmd: "make cloud-status" },
+            { icon: "☁️", title: "Enable Cloud", desc: "Turn on OpenAI fallback", cmd: "make cloud-on" },
+            { icon: "🔒", title: "Disable Cloud", desc: "Turn off OpenAI fallback (cost $0)", cmd: "make cloud-off" },
+            { icon: "🛠️", title: "Install venv", desc: "Create virtualenv and install deps", cmd: "make venv" },
+            { icon: "📦", title: "Backup All", desc: "Full project backup with models", cmd: "make backup-all" },
+            { icon: "🔌", title: "Health Check", desc: "Test API health endpoint", cmd: "curl -s http://localhost:8082/healthz | jq" },
+            { icon: "📋", title: "List Models", desc: "Show available router models", cmd: "curl -s http://localhost:8082/v1/models | jq '.data[].id'" },
+            { icon: "🧪", title: "Test Routing", desc: "Send test prompt to router", cmd: "curl -s http://localhost:8082/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"router-auto\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}' | jq" },
+            { icon: "🌡️", title: "Warm Up", desc: "Pre-load models and cache", cmd: "make warm" },
+            { icon: "☁️", title: "Test Nano", desc: "Test OpenAI Nano (Tier 2)", cmd: "make test-nano" },
+            { icon: "☁️", title: "Test Mini", desc: "Test OpenAI Mini (Tier 2)", cmd: "make test-mini" },
+            { icon: "💻", title: "Test Codex", desc: "Test GPT-5.2 Codex", cmd: "make test-codex" },
+            { icon: "🧠", title: "Test High", desc: "Test GPT-5.2 High", cmd: "make test-high" },
+            { icon: "🦙", title: "Test Local Llama", desc: "Test local Llama 3.1", cmd: "make local-llama" },
+            { icon: "👨‍💻", title: "Test Local DeepSeek", desc: "Test local DeepSeek V2", cmd: "make local-deepseek" },
+            { icon: "📦", title: "Restore Models", desc: "Restore Ollama blobs from backup", cmd: "make restore-ollama" },
+            { icon: "🛑", title: "Stop Service", desc: "Stop the systemd service", cmd: "make stop" },
+            { icon: "💀", title: "Kill Port 8082", desc: "Force kill process on port", cmd: "make kill-8082" },
         ];
 
-        // --- UI UTILS ---
-        const ui = {
-            term: document.getElementById('terminal'),
-            status: document.getElementById('statusBadge'),
-            latency: document.getElementById('latencyDisplay'),
-            
-            log: (method, url, status, data, timeMs) => {
-                const div = document.createElement('div');
-                div.className = 'log-entry';
-                
-                const cls = status >= 400 ? 'ERR' : (method === 'GET' ? 'GET' : 'POST');
-                const timeTag = timeMs ? `<span style="color:#64748b; margin-left:10px">${timeMs}ms</span>` : '';
-                
-                div.innerHTML = `
-                    <div style="display:flex; align-items:center; margin-bottom:6px">
-                        <span class="method-badge ${cls}">${method}</span>
-                        <span style="color:#f1f5f9; font-weight:600">${url}</span>
-                        <span style="font-size:11px; margin-left:auto; color:${status < 300 ? 'var(--success)' : 'var(--danger)'}">HTTP ${status}</span>
-                        ${timeTag}
+        function renderCommands() {
+            const container = document.getElementById('commands');
+            COMMANDS.forEach((c, i) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="card-icon">${c.icon}</div>
+                        <div>
+                            <div class="card-title">${c.title}</div>
+                            <div class="card-desc">${c.desc}</div>
+                        </div>
                     </div>
+                    <div class="cmd-box">
+                        <code>${c.cmd}</code>
+                    </div>
+                    <button class="copy-btn" data-cmd="${c.cmd.replace(/"/g, '&quot;')}" onclick="copyCmd(this)">
+                        📋 Copy Command
+                    </button>
                 `;
-                
-                if (data && Object.keys(data).length > 0) {
-                    const pre = document.createElement('pre');
-                    pre.style.margin = '0';
-                    pre.innerHTML = syntaxHighlight(data);
-                    div.appendChild(pre);
-                }
-                
-                // Remove empty state if present
-                if (ui.term.innerText.includes('Awaiting Incoming Signals')) ui.term.innerHTML = '';
-                
-                ui.term.appendChild(div);
-                ui.term.scrollTop = ui.term.scrollHeight;
-            },
+                container.appendChild(card);
+            });
+        }
 
-            toast: (msg) => {
-                const t = document.getElementById('toast');
-                t.innerText = msg;
-                t.classList.add('show');
-                setTimeout(() => t.classList.remove('show'), 2000);
+        function copyCmd(btn) {
+            const cmd = btn.getAttribute('data-cmd');
+            navigator.clipboard.writeText(cmd).then(() => {
+                btn.classList.add('copied');
+                btn.innerHTML = '✓ Copied!';
+                showToast();
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '📋 Copy Command';
+                }, 2000);
+            });
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
+        async function checkHealth() {
+            const status = document.getElementById('status');
+            try {
+                const res = await fetch('/healthz', { method: 'HEAD' });
+                if (res.ok) {
+                    status.innerHTML = '<span class="pulse"></span><span>SYSTEM ONLINE</span>';
+                    status.style.borderColor = '#10b981';
+                    status.style.color = '#10b981';
+                } else {
+                    throw new Error();
+                }
+            } catch {
+                status.innerHTML = '<span class="pulse"></span><span>OFFLINE</span>';
+                status.style.borderColor = '#ef4444';
+                status.style.color = '#ef4444';
             }
-        };
-
-        // --- API LAYER ---
-        const api = {
-            request: async (method, url, body = null) => {
-                const t0 = performance.now();
-                try {
-                    const opts = { method, headers: { 'Content-Type': 'application/json' } };
-                    if (body) opts.body = JSON.stringify(body);
-                    
-                    const res = await fetch(BASE + url, opts);
-                    const data = await res.json();
-                    
-                    const latency = (performance.now() - t0).toFixed(0);
-                    ui.log(method, url, res.status, data, latency);
-                    
-                    // Update stats
-                    if (data.usage && data.usage.latency_ms_router) {
-                        ui.latency.innerText = data.usage.latency_ms_router + 'ms';
-                    }
-                    
-                    return data;
-                } catch (e) {
-                    ui.log(method, url, 0, { error: e.message }, 0);
-                }
-            },
-            get: (url) => api.request('GET', url),
-            post: (url, body) => api.request('POST', url, body),
-            route: (label, text, code) => api.post('/route', { messages: [{ role: 'user', content: text }], prefer_code: code }),
-            test: (model) => api.post('/actions/test', { model: model })
-        };
-
-        // --- INITIALIZATION ---
-        function init() {
-            // Render Commands
-            const container = document.getElementById('cmdContainer');
-            COMMANDS.forEach(c => {
-                const el = document.createElement('div');
-                el.className = 'cmd-item';
-                el.innerHTML = `
-                    <span class="control-label" style="margin-bottom:4px; color:var(--accent)">${c.label}</span>
-                    <code class="cmd-display">${c.cmd.length > 40 ? c.cmd.substring(0,37)+'...' : c.cmd}</code>
-                    <button class="copy-btn" onclick="copyToClip('${c.cmd.replace(/'/g, "\\'")}')">COPY COMMAND</button>
-                `;
-                container.appendChild(el);
-            });
-
-            // Start Heartbeat
-            setInterval(async () => {
-                try {
-                    const r = await fetch('/healthz', { method: 'HEAD' });
-                    if (r.ok) {
-                        ui.status.className = 'status-badge';
-                        ui.status.innerHTML = '<div class="pulse"></div> SYSTEM ONLINE';
-                    } else {
-                        throw new Error('500');
-                    }
-                } catch {
-                    ui.status.className = 'status-badge offline';
-                    ui.status.innerHTML = '<div class="pulse"></div> CONNECTION LOST';
-                }
-            }, 5000);
-
-            ui.log('SYS', 'INITIALIZED', 200, { msg: "Mission Control Loaded", port: 8087, version: "2.5.0" }, 0);
         }
 
-        // --- HELPERS ---
-        function copyToClip(text) {
-            navigator.clipboard.writeText(text).then(() => ui.toast('COMMAND COPIED > CLIPBOARD'));
-        }
-
-        function syntaxHighlight(json) {
-            if (typeof json !== 'string') json = JSON.stringify(json, undefined, 2);
-            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-                let cls = 'num';
-                if (/^"/.test(match)) {
-                    if (/:$/.test(match)) { cls = 'key'; } else { cls = 'str'; }
-                } else if (/true|false/.test(match)) { cls = 'bool'; } else if (/null/.test(match)) { cls = 'bool'; }
-                return '<span class="' + cls + '">' + match + '</span>';
-            });
-        }
-
-        init();
+        // Init
+        renderCommands();
+        checkHealth();
+        setInterval(checkHealth, 10000);
     </script>
 </body>
+
 </html>

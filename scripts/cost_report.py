@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
+import datetime
 import json
 import os
-import datetime
 from collections import defaultdict
 
 LOG_FILE = "logs/metrics.jsonl"
@@ -39,7 +39,7 @@ def generate_report():
         by_tier[t] += 1
         cost_by_tier[t] += m.get("cost_est_usd", 0)
         
-    print(f"\n=== AI ROUTER COST REPORT ===")
+    print("\n=== AI ROUTER COST REPORT ===")
     print(f"Generated: {datetime.datetime.now().isoformat()}")
     print("-" * 30)
     print(f"Total Requests : {total_reqs}")

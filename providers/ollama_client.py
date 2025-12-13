@@ -1,6 +1,8 @@
 import os
-from langchain_ollama import ChatOllama
+
 from langchain_core.runnables import RunnableLambda
+from langchain_ollama import ChatOllama
+
 
 def make_ollama(model: str, temperature: float = 0.0):
     base_url = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_URL") or "http://localhost:11434"

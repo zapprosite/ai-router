@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import json, re
+import json
+import re
 from pathlib import Path
 
 H = Path("public/Guide.html")

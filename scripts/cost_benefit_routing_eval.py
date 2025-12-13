@@ -1,7 +1,5 @@
-import json
+
 import requests
-import sys
-from typing import Dict, Any, List
 
 # Define the Prompt Battery
 PROMPTS = [

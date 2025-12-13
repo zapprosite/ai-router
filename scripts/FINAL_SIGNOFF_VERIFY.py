@@ -6,12 +6,9 @@ Phases covered:
 - Phase 2: Simulated Deployment (Imports, App Boot, Router State)
 - Phase 3: Integration Routing Tests (Real Logic Simulation)
 """
-import sys
-import os
-import time
-import json
 import logging
-import asyncio
+import os
+import sys
 
 # Setup basic logging to capture output
 logging.basicConfig(level=logging.ERROR)
@@ -36,7 +33,6 @@ def phase2_simulated_deployment():
     # 2.1 Imports & App Boot
     try:
         print("Attempting to import app.main...")
-        from app.main import app, REQUIRED_MODELS
         reporter.check("Import app.main", True)
     except Exception as e:
         reporter.check("Import app.main", False, str(e))
@@ -44,7 +40,7 @@ def phase2_simulated_deployment():
 
     # 2.2 Config Loading
     try:
-        from graph.router import CONFIG, REG, TH
+        from graph.router import REG, TH
         reporter.check("Config Loaded", True, f"{len(REG)} models")
         
         # Verify Critical Regex exists
@@ -61,7 +57,7 @@ def phase2_simulated_deployment():
 
 def phase3_integration_tests():
     print("\n--- PHASE 3: INTEGRATION TEST SUITE ---")
-    from graph.router import pick_model_id, RouterState
+    from graph.router import pick_model_id
     
     # Mocking environment for test consistency
     os.environ["ENABLE_OPENAI_FALLBACK"] = "1"

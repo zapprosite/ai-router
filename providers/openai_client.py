@@ -1,6 +1,7 @@
 import os
-from langchain_openai import ChatOpenAI
+
 from langchain_core.runnables import RunnableLambda
+from langchain_openai import ChatOpenAI
 
 
 def _needs_reasoning(name: str) -> bool:
@@ -12,7 +13,7 @@ def _needs_reasoning(name: str) -> bool:
 def _is_responses_only(name: str) -> bool:
     # Disabled: Responses API requires special access. Use standard chat completions.
     # n = (name or "").lower()
-    # return n in ("gpt-5-codex", "gpt-5.1-codex", "gpt-5.1-codex-mini")
+    # return n in ("gpt-5-codex", "gpt-5.2-codex", "gpt-5.2-codex-mini")
     return False
 
 
@@ -23,14 +24,14 @@ def make_openai(model: str, temperature: float = 0.0):
     proj = os.getenv("OPENAI_PROJECT")
     timeout = int(os.getenv("OPENAI_TIMEOUT_SEC", "20"))
 
-    # Stability Layer: Map future GPT-5.1 models to stable GPT-4.1 equivalents
+    # Stability Layer: Map future GPT-5.2 models to stable GPT-4o equivalents
     # This ensures "2025" models work reliably with current infrastructure
-    if model == "gpt-5.1-high":
-        model = "gpt-4.1" # Best available high-end writing model
-    elif model == "gpt-5.1-codex-mini":
-        model = "gpt-4.1-mini" # Fast code model mapping
-    elif model == "gpt-5.1-codex-high":
-        model = "gpt-4.1" # High-end code model mapping
+    if model == "gpt-5.2-high":
+        model = "gpt-4o" # Best available high-end writing model (Stable)
+    elif model == "gpt-5.2-codex-mini":
+        model = "gpt-4o-mini" # Fast code model mapping (Stable)
+    elif model == "gpt-5.2-codex-high":
+        model = "gpt-4o" # High-end code model mapping (Stable)
 
     if not key:
         # generate a Runnable that fails to trigger fallbacks without breaking imports
@@ -38,12 +39,13 @@ def make_openai(model: str, temperature: float = 0.0):
             raise RuntimeError("OpenAI disabled: missing OPENAI_API_KEY")
         return RunnableLambda(_raise)
 
-    # Models that require the Responses API (e.g., gpt-5-codex, gpt-5.1-codex)
+    # Models that require the Responses API (e.g., gpt-5-codex, gpt-5.2-codex)
     if _is_responses_only(model):
-        import uuid
-        import httpx
         import logging
         import time
+        import uuid
+
+        import httpx
         
         logger = logging.getLogger("ai-router.openai")
         
@@ -88,7 +90,16 @@ def make_openai(model: str, temperature: float = 0.0):
                         return str(data)
                         
                 except httpx.HTTPStatusError as e:
-                    logger.warning(f"Responses API error (attempt {attempt+1}): {e.response.status_code} - {e.response.text[:200]}")
+                    logger.warning(
+                        f"Responses API error (attempt {attempt+1}): "
+                        f"{e.response.status_code} - {e.response.text[:200]}"
+                    )
+                    
+                    # Don't retry fatal 4xx errors (except 429)
+                    if e.response.status_code in (400, 401, 402, 403, 404):
+                         # Raises specific structured error that Router can catch
+                         raise ValueError(f"Upstream Error {e.response.status_code}: {e.response.text}")
+
                     if attempt < max_retries - 1:
                         time.sleep(2 ** attempt)  # Exponential backoff
                     else:

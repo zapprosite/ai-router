@@ -1,48 +1,37 @@
-# Contributing to AI Router
-
-First of all, thank you for considering contributing to AI Router! It's people like you that make this tool faster, smarter, and more robust.
-
-## 🤝 How Can I Help?
-
-### 1. Report Bugs
-Found a routing error? A model failing?
-- Open an Issue.
-- Provide the `curl` command or prompt that caused the failure.
-- Include a snippet of the logs (`make logs`).
-
-### 2. Suggest Features
-Have an idea for a massive refactor or a simple tweak?
-- Check the issues board first.
-- Create a new issue describing the "Why" and "What" of your idea.
-
-### 3. Submit Pull Requests
-We accept PRs! Here's the workflow:
-
-1.  **Fork** the repo.
-2.  **Create a branch** for your feature: `git checkout -b feature/amazing-logic`
-3.  **Code** your heart out.
-4.  **Test** your changes:
-    ```bash
-    make smoke    # Run E2E smoke tests
-    pytest        # Run unit tests
-    ```
-5.  **Commit** with clear messages.
-6.  **Push** and open a **Pull Request**.
+# Contributing Guide
 
 ## 🛠️ Development Setup
+1. **Install Dependencies**:
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    pip install -e . # Install as package
+    ```
+2. **Setup Tools**:
+    ```bash
+    pip install ruff pytest
+    ```
 
-**One-Liner:**
+## ✅ Verification
+Before submitting changes, ALWAYS run the full verification suite:
 ```bash
-make dev
+make verify
 ```
-This sets up the virtualenv, installs dependencies, and starts the server in reload mode.
+This runs:
+1. Service Health Check.
+2. Linter (Ruff).
+3. Unit Tests (`tests/unit`).
+4. Integration Tests (`tests/integration`).
+5. Chaos/Resilience Tests.
 
-## 📐 Coding Standards
-
-- **Python**: We use `black` for formatting.
-- **Type Hints**: Please use type hints in function signatures.
-- **Docstrings**: Explain complex logic, especially in `app/router.py`.
-
-## 🛡️ License
-
-By contributing, you agree that your contributions will be licensed under the MIT License.
+## ➕ Adding a New Model
+1. Update `config/router_config.yaml`:
+    ```yaml
+    models:
+      - id: new-model-id
+        provider: ollama
+        name: new-model
+    ```
+2. Update Routing Policy if needed.
+3. Restart Service: `make restart`.

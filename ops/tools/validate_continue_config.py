@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-import sys, os, argparse
+import argparse
+import os
+import sys
+
 try:
     import yaml
 except Exception:
