@@ -621,7 +621,7 @@ def _evaluate_response(task: str, text: str) -> Tuple[bool, str]:
     return True, "ok"
 
 
-def _node_invoke(state: RouterState) -> RouterState:
+async def _node_invoke(state: RouterState) -> RouterState:
     """Invoke the selected model with quality gating and fallback."""
     wrapped = _sla_wrap(BRANCH)
     current_model = state.get("model_id", "llama-3.1-8b-instruct")
