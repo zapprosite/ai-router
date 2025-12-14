@@ -7,16 +7,9 @@ Tests that the router gracefully handles:
 - Cloud fallback mechanisms
 """
 import os
-import sys
 from unittest.mock import patch
 
 import pytest
-
-sys.path.insert(0, os.getcwd())
-
-# Mock environment before imports
-os.environ["ENABLE_OPENAI_FALLBACK"] = "1"
-os.environ["OPENAI_API_KEY"] = "sk-test-mock"
 
 from graph.router import (
     SLA,

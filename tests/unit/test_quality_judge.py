@@ -51,7 +51,7 @@ class TestQualityJudge:
             quality_score=5
         )
         
-        # In config, machine_learning.medium -> ["gpt-5.2-codex-high"]
+        # In config, machine_learning.medium -> ["local-code", "local-chat"] (Updated for strict local-first)
         model = select_model_from_policy(meta)
-        
-        assert "gpt-5.2" in model
+    
+        assert model in ["local-code", "local-chat"]

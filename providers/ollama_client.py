@@ -4,7 +4,30 @@ from langchain_core.runnables import RunnableLambda
 from langchain_ollama import ChatOllama
 
 
-def make_ollama(model: str, temperature: float = 0.0):
+def validate_model_id(model_name: str) -> bool:
+    """
+    Validate that a model exists in local Ollama.
+    """
+    try:
+        # Fast CLI check
+        import subprocess
+        result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            # Output format: NAME     ID      SIZE   MODIFIED
+            # Check if model_name is a substring of any line (simple check)
+            # Better: parse lines
+            for line in result.stdout.splitlines()[1:]:
+                parts = line.split()
+                if not parts:
+                    continue
+                name = parts[0]
+                if name == model_name or name.startswith(model_name + ":"):
+                     return True
+        return False
+    except Exception:
+        return False
+
+def make_ollama(model: str, temperature: float = 0.1):
     base_url = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_URL") or "http://localhost:11434"
     
     # Determine configuration tier (Coder vs Instruct)

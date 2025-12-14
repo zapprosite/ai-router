@@ -62,23 +62,31 @@ models:
     tier: 4
     capabilities: ["reasoning", "system_design", "code_crit_debug", "research"]
 
-  # === TIER 5: CLOUD ELITE (GPT-5.1 - 2025) ===
+  # === TIER 5: CLOUD ELITE (GPT-5.2 / 4o-High) ===
+  # === TIER 5: CLOUD ELITE (GPT-5.2 / 4o-High) ===
+  # ALIAS MAPPING: These virtual IDs map to real models + params
   - id: gpt-5.2-high
     provider: openai
-    name: "gpt-5.2-high"
+    name: "gpt-4o" # Base Model
     tier: 5
+    params:
+      reasoning_effort: "high"
     capabilities: ["reasoning", "research", "creative_writing"]
 
   - id: gpt-5.2-codex-mini
     provider: openai
-    name: "gpt-5.2-codex-mini"
+    name: "gpt-4o-mini" # Base Model
     tier: 5
+    params:
+      reasoning_effort: "low" # Speed focus
     capabilities: ["code_gen", "code_review"]
 
   - id: gpt-5.2-codex-high
     provider: openai
-    name: "gpt-5.2-codex-high"
+    name: "gpt-4o" # Base Model
     tier: 5
+    params:
+      reasoning_effort: "high"
     capabilities: ["code_crit_debug", "system_design", "refactoring"]
 
 # ---------- AUTOMATIC CLASSIFICATION ----------
@@ -107,8 +115,8 @@ task_types:
   
   code_gen:
     description: "Code generation (functions, scripts, snippets)"
-    keywords: ["write code", "create function", "implement", "script", "```", "backend", "frontend", "api", "fastapi"]
-    regex: "(def |class |function |import |```)"
+    keywords: ["write code", "create function", "implement", "script", "```", "backend", "frontend", "api", "fastapi", "algorithm", "optimize", "C++", "Rust"]
+    regex: "(def |class |function |import |```|std::|impl )"
     complexity_default: "medium"
   
   code_review:
@@ -119,8 +127,8 @@ task_types:
   
   code_crit_debug:
     description: "Critical debugging (deadlocks, race conditions, memory leaks)"
-    keywords: ["deadlock", "race condition", "memory leak", "segfault", "core dump"]
-    regex: "(deadlock|race\\s*condition|memory\\s*leak|security\\s+vulnerability|production\\s+incident|postmortem)"
+    keywords: ["deadlock", "race condition", "memory leak", "segfault", "core dump", "high-frequency trading", "low latency"]
+    regex: "(deadlock|race\\s*condition|memory\\s*leak|security\\s+vulnerability|production\\s+incident|postmortem|hft|trading)"
     complexity_default: "critical"
   
   system_design:
@@ -139,6 +147,12 @@ task_types:
     keywords: ["research", "compare", "analyze", "prove", "explain in detail"]
     complexity_default: "high"
   
+  creative_writing:
+    description: "Screenplays, poems, stories, marketing copy"
+    keywords: ["screenplay", "poem", "haiku", "story", "marketing", "creative", "movie scene"]
+    regex: "(screenplay|poem|haiku|story|marketing|movie\\s+scene)"
+    complexity_default: "high"
+
   # Machine Learning & AI
   machine_learning:
     description: "AI/ML model design, training, pytorch, tensorflow"
@@ -177,10 +191,8 @@ complexity_signals:
 
 # ---------- ROUTING POLICY TABLE ----------
 # Maps (task, complexity) -> preferred model tiers
-# EXPERTISE MATRIX APPLIED:
-# - DeepSeek-V2 (Local 4090) -> King of Logics/Code
-# - GPT-5.2 (Cloud) -> Creative/Nuance
-# - O3 (Cloud) -> Math/Critical reasoning
+# POLICY: Low/Medium -> ALWAYS Local First. High/Critical -> Cloud Allowed.
+# Fallback strategy: Local -> Cloud (only if Quality Gate fails or Critical)
 routing_policy:
   # Chitchat / Simple (Llama 3.1 Domain)
   chitchat:
@@ -190,68 +202,69 @@ routing_policy:
   
   simple_qa:
     low: ["local-chat"]
-    medium: ["local-chat"]
-    high: ["gpt-4o-mini"] # Cloud for slightly better knowledge base
+    medium: ["local-chat", "gpt-4o-mini"] # Escalate if local fails
+    high: ["local-chat", "gpt-4o-mini"]
   
   translation:
     low: ["local-chat"]
-    medium: ["local-chat"]
-    high: ["gpt-4o-mini"]
+    medium: ["local-chat", "gpt-4o-mini"]
+    high: ["local-chat", "gpt-4o-mini"]
   
   # Code Tasks (DeepSeek Dominance - Local 4090)
   code_gen:
     low: ["local-code"]
-    medium: ["local-code"]
-    high: ["local-code"]  # DeepSeek V2 is often superior to Mini models
-    critical: ["o3", "local-code"] # Only escalate to O3 if absolutely critical
+    medium: ["local-code", "gpt-5.2-codex-mini"] # Escalate if local code fails gate
+    high: ["local-code", "gpt-5.2-codex-mini"]
+    critical: ["gpt-5.2-codex-high", "o3"]
   
   code_review:
     low: ["local-code"]
-    medium: ["local-code"]
-    high: ["local-code"]
-    critical: ["o3"]
+    medium: ["local-code", "gpt-5.2-codex-mini"]
+    high: ["local-code", "gpt-5.2-codex-mini"]
+    critical: ["gpt-5.2-codex-high", "o3"]
   
   code_crit_debug:
     low: ["local-code"]
-    medium: ["local-code"]
-    high: ["local-code"] # Try DeepSeek first
-    critical: ["o3"]     # If it's a deadlock/security issue, ask the PHD (O3)
+    medium: ["local-code", "gpt-5.2-codex-mini"]
+    high: ["local-code", "gpt-5.2-codex-mini"]
+    critical: ["gpt-5.2-codex-high", "o3"]
   
   # Specialized Domains
   machine_learning:
     low: ["local-code"]
-    medium: ["gpt-5.2-high"] # ML requires broad research context
-    high: ["o3"]             # Math heavy
+    medium: ["local-code", "gpt-5.2-high"] # Fallback to researcher
+    high: ["gpt-5.2-high"]
     critical: ["o3"]
 
   cloud_architecture:
     low: ["local-code"]
-    medium: ["gpt-5.2-high"]
-    high: ["o3"]
+    medium: ["local-code", "gpt-5.2-high"]
+    high: ["gpt-5.2-high"]
     critical: ["o3"]
 
   system_design:
     low: ["local-code"]
-    medium: ["gpt-5.2-high"]
-    high: ["o3"]
+    medium: ["local-code", "gpt-5.2-codex-high"]
+    high: ["gpt-5.2-codex-high", "o3"]
     critical: ["o3"]
 
   # Creative / Research (GPT-5.2 Domain)
-  creative_writing: # New category implied
-    low: ["gpt-5.2-high"]
-    medium: ["gpt-5.2-high"]
+  creative_writing:
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-5.2-high"]
     high: ["gpt-5.2-high"]
+    critical: ["gpt-5.2-high"]
 
   research:
-    low: ["gpt-4o-mini"]
-    medium: ["gpt-5.2-high"]
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-5.2-high"]
     high: ["gpt-5.2-high"]
     critical: ["o3"]
   
   reasoning:
-    low: ["gpt-4o-mini"]
-    medium: ["o3-mini"]
-    high: ["o3"]
+    low: ["local-chat"] 
+    medium: ["local-code", "o3-mini"] 
+    high: ["o3-mini", "o3"]
     critical: ["o3"]
 
 # ---------- CLASSIFIER SETTINGS ----------
