@@ -20,7 +20,7 @@ models:
   # === TIER 2: CLOUD BUDGET (OpenAI) ===
   - id: gpt-4.1-nano
     provider: openai
-    name: "gpt-4.1-nano"
+    name: "gpt-4o-mini"
     tier: 2
     capabilities: ["classification", "routing_judge"]
 
@@ -30,35 +30,35 @@ models:
     tier: 2
     capabilities: ["chitchat", "translation", "summary"]
 
-  # === TIER 3: CLOUD CODE (OpenAI GPT-4.1) ===
+  # === TIER 3: CLOUD CODE (OpenAI GPT-4 Turbo) ===
   - id: gpt-4.1-mini
     provider: openai
-    name: "gpt-4.1-mini"
+    name: "gpt-4o-mini"
     tier: 3
     capabilities: ["code_gen", "code_review"]
 
   - id: gpt-4.1
     provider: openai
-    name: "gpt-4.1"
+    name: "gpt-4-turbo"
     tier: 3
     capabilities: ["code_gen", "code_review", "code_crit_debug", "system_design"]
 
-  # === TIER 4: CLOUD REASONING (OpenAI Premium) ===
+  # === TIER 4: CLOUD REASONING (OpenAI O1 Series) ===
   - id: o3-mini
     provider: openai
-    name: "o3-mini"
+    name: "o1-mini"
     tier: 4
     capabilities: ["reasoning", "system_design", "code_crit_debug"]
 
   - id: o1
     provider: openai
-    name: "o1"
+    name: "o1-preview"
     tier: 4
     capabilities: ["reasoning", "research"]
 
   - id: o3
     provider: openai
-    name: "o3"
+    name: "o1-preview"
     tier: 4
     capabilities: ["reasoning", "system_design", "code_crit_debug", "research"]
 
