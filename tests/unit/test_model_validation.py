@@ -19,17 +19,11 @@ from graph.router import REG, classify_prompt, select_model_from_policy
 
 # Known REAL model IDs that can be sent to OpenAI API
 KNOWN_OPENAI_IDS = {
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "o1",
-    "o3",
-    "o3-mini",
-    # Local models (Ollama) - not sent to OpenAI
-    "hermes3:8b",
-    "deepseek-coder-v2:16b",
+    "gpt-4o", "gpt-4o-mini",
+    "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", # Legacy Virtual
+    "o1", "o3", "o3-mini", # Legacy Virtual
+    "hermes3:8b", "deepseek-coder-v2:16b", # Ollama exposed via openai compat sometimes
+    "gpt-4-turbo", "o1-preview", "o1-mini" # Real New IDs
 }
 
 

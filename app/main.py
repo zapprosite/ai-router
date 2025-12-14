@@ -336,7 +336,7 @@ class TestReq(BaseModel):
     prompt: str | None = None
 
 @app.post("/actions/smoke")
-def actions_smoke():
+async def actions_smoke():
     # roda 2 smokes rápidos através do grafo (roteador real)
     st1 = {
         "messages":[{"role":"user","content":"Explique HVAC em 1 frase."}],
@@ -346,12 +346,12 @@ def actions_smoke():
         "messages":[{"role":"user","content":"Escreva uma função Python soma(n1,n2) com docstring."}],
         "budget":"low","prefer_code":True
     }
-    out1 = router_app.invoke(st1)
-    out2 = router_app.invoke(st2)
+    out1 = await router_app.ainvoke(st1)
+    out2 = await router_app.ainvoke(st2)
     return {"ok":True,"smoke":[out1,out2]}
 
 @app.post("/actions/test")
-def actions_test(body: TestReq):
+async def actions_test(body: TestReq):
     # invoca modelo específico direto (sem roteador)
     from graph.router import resolve_model_alias
     from providers.ollama_client import make_ollama
@@ -370,7 +370,7 @@ def actions_test(body: TestReq):
         chain = make_openai(real_id, 0.0, params=params)
 
     try:
-        out = chain.invoke({"messages":[{"role":"user","content":prompt}]})
+        out = await chain.ainvoke({"messages":[{"role":"user","content":prompt}]})
         return {"ok":True,"model":name,"resolved":real_id,"preview":str(out)[:500]}
     except Exception as e:
         return {"ok":False,"model":name,"error":str(e)}
@@ -395,15 +395,14 @@ async def health_check():
         "gpu_queue": metrics
     }
 
-# --- OpenAI shim: /v1/chat/completions ---
-# --- Shared Routing Logic ---
-def _run_router_completion(messages: List[Dict], prefer_code: bool = False, **kwargs) -> Dict:
+
+async def _run_router_completion(messages: List[Dict], prefer_code: bool = False, **kwargs) -> Dict:
     """
     Shared utility to invoke the router graph.
-    Returns the raw output dictionary from router_app.invoke().
+    Returns the raw output dictionary from router_app.ainvoke().
     """
     try:
-        out = router_app.invoke({
+        out = await router_app.ainvoke({
             "messages": messages,
             "budget": "balanced",
             "prefer_code": prefer_code,
@@ -443,12 +442,12 @@ class _ChatReq(BaseModel):
 
 @app.post("/v1/chat/completions")
 @limiter.limit("50/minute")
-def _chat_completions(request: Request, body: _ChatReq):
+async def _chat_completions(request: Request, body: _ChatReq):
     # Minimal heuristic to hint code preference
     txt = "\n".join([m.content for m in body.messages if m.role in ("user","system")])
     prefer_code = ("```" in txt) or ("def " in txt) or ("class " in txt) or ("traceback" in txt)
     
-    out = _run_router_completion(
+    out = await _run_router_completion(
         messages=[m.model_dump() for m in body.messages],
         prefer_code=bool(prefer_code)
     )
@@ -565,7 +564,7 @@ def _sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 @app.post("/v1/responses")
-def _responses_api(body: _ResponseReq, request: Request):
+async def _responses_api(body: _ResponseReq, request: Request):
     # Check if streaming is requested
     accept_header = request.headers.get("accept", "")
     stream_requested = body.stream == True or "text/event-stream" in accept_header
@@ -578,7 +577,7 @@ def _responses_api(body: _ResponseReq, request: Request):
     prefer_code = ("```" in txt) or ("def " in txt) or ("class " in txt) or ("traceback" in txt)
 
     # 3. Invoke Router
-    out = _run_router_completion(
+    out = await _run_router_completion(
         messages=messages,
         prefer_code=bool(prefer_code)
     )
@@ -733,7 +732,7 @@ def _responses_api(body: _ResponseReq, request: Request):
 
 @app.post("/route")
 @limiter.limit("100/minute")
-def route(request: Request, req: RouteRequest) -> Dict[str, Any]:
+async def route(request: Request, req: RouteRequest) -> Dict[str, Any]:
     t0 = time.perf_counter()
     state = {
         "messages": [m.model_dump() for m in req.messages],
@@ -744,7 +743,7 @@ def route(request: Request, req: RouteRequest) -> Dict[str, Any]:
         "_latency_start": t0,
     }
     try:
-        out = router_app.invoke(state)
+        out = await router_app.ainvoke(state)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     out["usage"]["latency_ms_router"] = int((time.perf_counter() - t0) * 1000)
