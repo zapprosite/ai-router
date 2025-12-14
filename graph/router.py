@@ -30,7 +30,9 @@ from langgraph.graph import END, StateGraph
 
 from graph.cost_guard import PRICING_PER_1M, _get_tier_from_model
 from providers.ollama_client import make_ollama
-from providers.openai_client import make_openai
+from providers.openai_client import is_cloud_enabled, make_openai
+from providers.openai_client import validate_model_id as validate_openai_id
+from services.gpu_queue import run_on_gpu
 
 logger = logging.getLogger("ai-router.graph")
 
@@ -116,6 +118,9 @@ class RouterState(TypedDict, total=False):
     attempts: List[Dict[str, str]]
     output: str
     usage: Dict[str, Any]
+    
+    # Cloud availability flag (determined once at request start)
+    cloud_available: bool
 
 # ---------- Utilities ----------
 def join_messages(msgs: List[Dict[str, str]]) -> str:
@@ -133,18 +138,21 @@ def _has_openai() -> bool:
 def _is_cloud_available() -> bool:
     """
     Check if cloud models are authorized.
-    Automatic detection: True if keys exist. Manual toggles are DEPRECATED in favor of Judge autonomy.
+    Strict Rule: SLA config True AND Env Var == 1 AND Keys present.
     """
-    # Simply check if we have the keys to pay for the ride.
-    # The Judge decides if we take the ride.
-    if _has_openai():
-        return True
-    
-    # Optional: Keep "0" to force-kill for testing, but default is "Trust the Judge"
-    if str(os.getenv("ENABLE_OPENAI_FALLBACK", "")).strip() == "0":
+    # 1. Config Gate
+    if not SLA.get("enable_cloud_fallback", False):
+        return False
+
+    # 2. Env Gate
+    if str(os.getenv("ENABLE_OPENAI_FALLBACK", "")).strip() != "1":
+        return False
+
+    # 3. Key Gate
+    if not _has_openai():
         return False
         
-    return False
+    return True
 
 # Legacy alias for compatibility
 _fallback_enabled = _is_cloud_available
@@ -325,7 +333,7 @@ def classify_prompt_with_llm(messages: List[Dict[str, str]], heuristic_meta: Rou
                 try:
                     heuristic_meta.quality_score = int(quality_match.group(1))
                 except ValueError:
-                    pass
+                    logger.warning(f"Invalid quality score in LLM response: {quality_match.group(1)}")
 
             heuristic_meta.classifier_used = "llm"
             heuristic_meta.confidence = 0.9
@@ -401,6 +409,28 @@ def pick_model_id(state: RouterState) -> str:
     
     return select_model_from_policy(routing_meta, state.get("budget"))
 
+# ---------- Model Resolution ----------
+def resolve_model_alias(model_id: str) -> Tuple[str, Dict, str]:
+    """
+    Resolve a potential alias (virtual ID) to a real provider ID, params, and provider name.
+    
+    Returns:
+        (real_id, params, provider)
+    
+    Example:
+        "gpt-5.2-high" -> ("gpt-4o", {"reasoning_effort": "high"}, "openai")
+    """
+    if model_id not in REG:
+        # Pass through unknown IDs (might be raw openai model not in config)
+        return model_id, {}, "openai" if model_id.startswith("gpt") else "ollama"
+    
+    meta = REG[model_id]
+    real_id = meta.get("name", model_id)
+    params = meta.get("params", {}).copy() # Copy to avoid mutation
+    provider = meta.get("provider", "ollama")
+    
+    return real_id, params, provider
+
 # ---------- Chains ----------
 def _build_chain(model_id: str):
     """Build a LangChain runnable for the specified model."""
@@ -408,11 +438,31 @@ def _build_chain(model_id: str):
         logger.warning(f"Model {model_id} not in registry. Falling back to llama.")
         model_id = "llama-3.1-8b-instruct"
     
-    meta = REG[model_id]
-    if meta["provider"] == "ollama":
-        return make_ollama(meta["name"], temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.1")))
+    real_id, params, provider = resolve_model_alias(model_id)
+
+    if provider == "ollama":
+        return make_ollama(real_id, temperature=float(os.getenv("OLLAMA_TEMPERATURE", "0.1")))
     else:
-        return make_openai(meta["name"], temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.0")))
+        # STRICT FALLBACK: If Cloud is disabled via Env/Config, NEVER return an OpenAI chain.
+        if not _is_cloud_available():
+            logger.warning(f"Cloud blocked globally: Routing {model_id} to local-code.")
+            return _build_chain("local-code")
+
+        # Validate that model_id is a known alias or real ID in REG
+        # User Feedback: "Don't invent IDs"
+        if model_id not in REG and real_id not in [m["name"] for m in REG.values()]:
+             # If it's a completely unknown random string, don't send to OpenAI
+             logger.warning(f"Unknown Model ID {model_id} / {real_id}. Blocking cloud call.")
+             return _build_chain("local-code")
+
+        # Validate Real ID existence (User Feedback: prevent 404/400)
+        # This runs once per process life/model access (cached in CHAINS)
+        if not validate_openai_id(real_id):
+            logger.error(f"Validation Failed: {real_id} (alias: {model_id}) not found in OpenAI account.")
+            logger.warning(f"Fallback: Routing {model_id} to local-code due to validation failure.")
+            return _build_chain("local-code")
+
+        return make_openai(real_id, temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.0")), params=params)
 
 # Pre-build chains for common models
 CHAINS = {}
@@ -501,11 +551,18 @@ def _node_classify(state: RouterState) -> RouterState:
     """Classify the prompt and determine routing metadata."""
     msgs = state["messages"]
     
+    # Determine cloud availability ONCE at request start
+    # This combines: config gate + env gate + key gate + auth status cache
+    cloud_available = _is_cloud_available() and is_cloud_enabled()
+    
+    logger.info(f"Request start: cloud_available={cloud_available}")
+    
     # Automatic classification
     routing_meta = classify_prompt(msgs)
     
-    # Refine with LLM if enabled and uncertain
-    routing_meta = classify_prompt_with_llm(msgs, routing_meta)
+    # Refine with LLM if enabled and uncertain (only if cloud is available)
+    if cloud_available:
+        routing_meta = classify_prompt_with_llm(msgs, routing_meta)
     
     # Apply legacy overrides if present
     if state.get("critical", False):
@@ -514,7 +571,18 @@ def _node_classify(state: RouterState) -> RouterState:
     if state.get("prefer_code", False) and routing_meta.task in ["simple_qa", "chitchat"]:
         routing_meta.task = "code_gen"
     
-    return {"routing_meta": asdict(routing_meta)}
+    # If cloud is NOT available, boost complexity to prefer better local models
+    complexity_boosted = False
+    if not cloud_available and routing_meta.complexity in ["high", "critical"]:
+        # Force local with complexity_boost: prefer the best local model (deepseek-coder)
+        complexity_boosted = True
+        logger.info(f"Cloud unavailable: applying complexity_boost for {routing_meta.complexity} task")
+    
+    result = {"routing_meta": asdict(routing_meta), "cloud_available": cloud_available}
+    if complexity_boosted:
+        result["routing_meta"]["complexity_boosted"] = True
+    
+    return result
 
 def _node_route(state: RouterState) -> RouterState:
     """Select the model based on routing metadata."""
@@ -558,6 +626,9 @@ def _node_invoke(state: RouterState) -> RouterState:
     wrapped = _sla_wrap(BRANCH)
     current_model = state.get("model_id", "llama-3.1-8b-instruct")
     
+    # Get cloud_available from state (determined once in _node_classify)
+    cloud_available = state.get("cloud_available", False)
+    
     # Get initial routing meta for policy lookup
     routing_meta_dict = state.get("routing_meta", {})
     routing_meta = RoutingMeta(**routing_meta_dict) if routing_meta_dict else classify_prompt(state["messages"])
@@ -577,7 +648,18 @@ def _node_invoke(state: RouterState) -> RouterState:
         logger.info(f"Invoking {current_model} (Attempt {attempt_count}/{max_attempts})")
         
         try:
-            out_chain = wrapped.invoke({"messages": state["messages"], "model_id": current_model})
+            # Check provider to decide if queueing is needed
+            # Only local models (Ollama) hit the GPU queue
+            meta = REG.get(current_model, {})
+            provider = meta.get("provider", "ollama")
+            
+            if provider == "ollama":
+                # Run with GPU Queue limits
+                out_chain = await run_on_gpu(wrapped.invoke, {"messages": state["messages"], "model_id": current_model})
+            else:
+                # Cloud/API runs directly without blocking GPU queue
+                out_chain = wrapped.invoke({"messages": state["messages"], "model_id": current_model})
+            
             out_text = str(out_chain) 
             
             # --- Quality Gate ---
@@ -609,14 +691,15 @@ def _node_invoke(state: RouterState) -> RouterState:
                 curr_idx = model_list.index(current_model)
                 # Look for valid next model
                 for candidate in model_list[curr_idx+1:]:
-                    # Check cloud availability
+                    # Check cloud availability from state (determined once at request start)
                     cand_meta = REG.get(candidate, {})
-                    if cand_meta.get("provider") == "openai" and not _is_cloud_available():
+                    if cand_meta.get("provider") == "openai" and not cloud_available:
+                        logger.info(f"Skipping cloud escalation to {candidate}: cloud_available=False")
                         continue
                     next_model = candidate
                     break
             except ValueError:
-                pass # Current model not in policy list, can't strictly escalate
+                logger.debug(f"Current model {current_model} not found in policy for escalation")
                 
             if next_model:
                 logger.info(f"Escalating from {current_model} to {next_model}")
@@ -636,13 +719,33 @@ def _node_invoke(state: RouterState) -> RouterState:
                 final_out = {"error": err_str, "type": "upstream_error"}
                 attempts_log.append({"model": current_model, "status": "upstream_error"})
                 break # Stop on auth/payment errors
-            else:
-                logger.error(f"Invocation failed: {e}")
-                # If exception, we might want to retry if configured, but for simplicity let's stop or fall through
-                # The _sla_wrap handles some fallbacks, but if it comes here it's fatal
-                final_out = f"Error: {e}"
-                attempts_log.append({"model": current_model, "status": "error"})
+            
+            # HARDENING: Catch specific OpenAI errors (401, 404)
+            if "401" in err_str or "AuthenticationError" in err_str:
+                logger.critical(f"AUTH ERROR: Model {current_model} returned 401. CHECK YOUR API KEY.")
+                final_out = "Error: Upstream Authentication Failed (401). Check .env."
+                attempts_log.append({"model": current_model, "status": "auth_error"})
+                # Fallback to local immediately if possible, but usually auth failure is fatal for cloud
+                if _fallback_enabled():
+                     logger.warning("Attempting fallback to local-code due to cloud auth failure.")
+                     wrapped = _get_chain("local-code") # Force local
+                     continue
                 break
+
+            if "404" in err_str or "NotFoundError" in err_str:
+                logger.error(f"MODEL NOT FOUND: {current_model} (404). Check if model name is correct/available.")
+                attempts_log.append({"model": current_model, "status": "model_not_found"})
+                # Try next model in loop logic below?
+                # Actually we are in the catch block of loop validation
+                # Trigger escalation logic manually effectively by setting status
+                pass # Fall through to escalation logic if loop continues? 
+                # The loop structure below this catch block expects 'break' or handled... 
+                # Let's just allow it to fall through to "Invocation failed" generic handling but with better log.
+
+            logger.error(f"Invocation failed: {e}")
+            final_out = f"Error: {e}"
+            attempts_log.append({"model": current_model, "status": "error"})
+            break
     
     # Build usage/telemetry
     prompt = join_messages(state["messages"])
@@ -661,7 +764,7 @@ def _node_invoke(state: RouterState) -> RouterState:
         "routing_meta": asdict(routing_meta),
         "attempts": attempts_log,
         "classifier_used": routing_meta.classifier_used,
-        "cloud_available": _is_cloud_available(),
+        "cloud_available": cloud_available,  # Use state value instead of calling function
         "escalated": escalated,
         "escalation_reason": escalation_reason
     }
@@ -684,7 +787,8 @@ def _node_invoke(state: RouterState) -> RouterState:
             "latency_ms": usage["latency_ms_router"],
             "cost_est_usd": round(cost_usd, 6),
             "status": final_status,
-            "escalated": escalated
+            "escalated": escalated,
+            "cloud_available": cloud_available  # Added to structured logs
         }
         
         # Log to stderr (for journalctl)

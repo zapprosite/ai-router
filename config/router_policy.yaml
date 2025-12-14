@@ -1,2 +1,101 @@
-routing:
-  local_models: ["llama3.1:8b-instruct-q5_K_M","deepseek-coder-v2:16b"]
+# AI Router Routing Policy - Complexity-Aware Routing Table
+# This file defines how prompts are routed based on task type and complexity.
+# POLICY: Low/Medium -> ALWAYS Local First. High/Critical -> Cloud Allowed.
+# Fallback strategy: Local -> Cloud (only if Quality Gate fails or Critical)
+
+# ---------- ROUTING POLICY TABLE ----------
+routing_policy:
+  # Chitchat / Simple (Llama 3.1 Domain)
+  chitchat:
+    low: ["local-chat"]
+    medium: ["local-chat"]
+    high: ["local-chat"]
+  
+  simple_qa:
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-4o-mini"]
+    high: ["local-chat", "gpt-4o-mini"]
+  
+  translation:
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-4o-mini"]
+    high: ["local-chat", "gpt-4o-mini"]
+  
+  summary:
+    low: ["local-chat"]
+    medium: ["local-chat"]
+    high: ["local-chat", "gpt-4o-mini"]
+  
+  # Code Tasks (DeepSeek Dominance - Local 4090)
+  code_gen:
+    low: ["local-code"]
+    medium: ["local-code", "gpt-5.2-codex-mini"]
+    high: ["local-code", "gpt-5.2-codex-mini"]
+    critical: ["gpt-5.2-codex-high", "o3"]
+  
+  code_review:
+    low: ["local-code"]
+    medium: ["local-code", "gpt-5.2-codex-mini"]
+    high: ["local-code", "gpt-5.2-codex-mini"]
+    critical: ["gpt-5.2-codex-high", "o3"]
+  
+  code_crit_debug:
+    low: ["local-code"]
+    medium: ["local-code", "gpt-5.2-codex-mini"]
+    high: ["local-code", "gpt-5.2-codex-mini"]
+    critical: ["gpt-5.2-codex-high", "o3"]
+  
+  # Data & Analysis
+  data_analysis:
+    low: ["local-code"]
+    medium: ["local-code"]
+    high: ["local-code", "gpt-5.2-high"]
+  
+  # Specialized Domains
+  machine_learning:
+    low: ["local-code"]
+    medium: ["local-code", "gpt-5.2-high"]
+    high: ["gpt-5.2-high"]
+    critical: ["o3"]
+
+  cloud_architecture:
+    low: ["local-code"]
+    medium: ["local-code", "gpt-5.2-high"]
+    high: ["gpt-5.2-high"]
+    critical: ["o3"]
+
+  system_design:
+    low: ["local-code"]
+    medium: ["local-code", "gpt-5.2-codex-high"]
+    high: ["gpt-5.2-codex-high", "o3"]
+    critical: ["o3"]
+
+  # Creative / Research (GPT-5.2 Domain)
+  creative_writing:
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-5.2-high"]
+    high: ["gpt-5.2-high"]
+    critical: ["gpt-5.2-high"]
+
+  research:
+    low: ["local-chat"]
+    medium: ["local-chat", "gpt-5.2-high"]
+    high: ["gpt-5.2-high"]
+    critical: ["o3"]
+  
+  reasoning:
+    low: ["local-chat"] 
+    medium: ["local-code", "o3-mini"] 
+    high: ["o3-mini", "o3"]
+    critical: ["o3"]
+
+# ---------- MODEL TIERS REFERENCE ----------
+# Tier 1 (Local Fast):   local-chat (hermes3:8b), local-code (deepseek-coder-v2:16b)
+# Tier 2 (Cloud Budget): gpt-4.1-nano, gpt-4o-mini
+# Tier 3 (Cloud Code):   gpt-4.1-mini, gpt-4.1
+# Tier 4 (Cloud Reason): o3-mini, o1, o3
+# Tier 5 (Cloud Elite):  gpt-5.2-high, gpt-5.2-codex-mini, gpt-5.2-codex-high
+
+# ---------- LEGACY MODELS (backwards compat) ----------
+legacy:
+  local_models: ["llama3.1:8b-instruct-q5_K_M", "deepseek-coder-v2:16b"]

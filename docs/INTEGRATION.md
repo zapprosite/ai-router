@@ -5,6 +5,7 @@ The router exposes two primary interfaces:
 
 ### 1. Smart Router (`POST /route`)
 Recommended for new integrations. Returns detailed routing metadata.
+Visual debug available at: `http://localhost:8082/dashboard.html`
 
 ```bash
 curl -X POST http://localhost:8082/route \

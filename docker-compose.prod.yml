@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # --- Core Application ---
+  ai-router:
+    build: .
+    container_name: ai-router-app
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8082/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ai-stack
+
+  # --- Database ---
+  postgres:
+    image: ankane/pgvector:v0.5.1 # Postgres 15 + pgvector integrated
+    container_name: ai-router-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password # Override in .env or Coolify secrets
+      POSTGRES_DB: ai_router
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-stack
+
+  # --- Queue Storage ---
+  redis:
+    image: redis:7-alpine
+    container_name: ai-router-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - ai-stack
+
+  # --- Local LLM Inference (GPU) ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-router-ollama
+    restart: unless-stopped
+    # Enable GPU Support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    networks:
+      - ai-stack
+
+  # --- Public Access (Tunnel) ---
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ai-router-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - ai-router
+    networks:
+      - ai-stack
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_models:
+
+
+networks:
+  ai-stack:
+    driver: bridge

@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Router — Executive Dashboard</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;700;900&display=swap"
+        rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <style>
+        :root {
+            /* Palette V2 - Deep Cyberpunk */
+            --bg-dark: #030712;
+            --bg-card: #0f172a;
+            --bg-card-hover: #1e293b;
+            --border: rgba(148, 163, 184, 0.1);
+
+            --primary: #06b6d4;
+            /* Cyan */
+            --primary-glow: rgba(6, 182, 212, 0.5);
+
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.5);
+
+            --purple: #8b5cf6;
+            --purple-glow: rgba(139, 92, 246, 0.5);
+
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+
+            --font-display: "Outfit", sans-serif;
+            --font-body: "Inter", sans-serif;
+            --font-mono: "JetBrains Mono", monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            min-height: 100vh;
+            padding: 0;
+            overflow-x: hidden;
+            background-image:
+                radial-gradient(circle at 15% 50%, rgba(6, 182, 212, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.05), transparent 25%);
+        }
+
+        /* --- Navbar --- */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(3, 7, 18, 0.8);
+        }
+
+        .brand {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 24px;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand .badge {
+            font-size: 11px;
+            background: var(--primary);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 700;
+            -webkit-text-fill-color: #000;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-actions a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+            margin-left: 24px;
+        }
+
+        .nav-actions a:hover {
+            color: var(--text-main);
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin-left: 20px;
+        }
+
+        /* --- Main Layout --- */
+        main {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        /* --- KPI Cards --- */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .card-label {
+            font-size: 13px;
+            color: var(--text-dim);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .card-value {
+            font-family: var(--font-display);
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .card-trend {
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .trend-up {
+            color: var(--success);
+        }
+
+        .trend-down {
+            color: var(--danger, #ef4444);
+        }
+
+        /* --- Charts Section --- */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1000px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+
+        h2 {
+            font-family: var(--font-display);
+            font-size: 18px;
+            margin-bottom: 24px;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        /* --- Status Badge --- */
+        .status-dot {
+            height: 8px;
+            width: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success-glow);
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        /* --- Glow Effects --- */
+        .glow-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.03), transparent 60%);
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <div class="brand">
+            AI ROUTER <span class="badge">PRO</span>
+        </div>
+        <div class="nav-actions">
+            <span style="color:var(--success); font-weight:600; font-size:13px; margin-right:20px;">
+                <span class="status-dot"></span> SYSTEM OPERATIONAL
+            </span>
+            <a href="/guide" class="nav-btn">Command Center -></a>
+        </div>
+    </nav>
+
+    <main>
+        <!-- KPIs -->
+        <div class="kpi-row">
+            <!-- Metric 1 -->
+            <div class="card">
+                <div class="glow-overlay"></div>
+                <div class="card-label">Total Volume <span style="opacity:0.5">24h</span></div>
+                <div class="card-value">14,205</div>
+                <div class="card-trend trend-up">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M18 15L12 9 6 15" />
+                    </svg>
+                    12.5% vs yesterday
+                </div>
+            </div>
+
+            <!-- Metric 2 -->
+            <div class="card">
+                <div class="glow-overlay"></div>
+                <div class="card-label">Cloud Spend (Est)</div>
+                <div class="card-value" style="color:var(--primary)">$0.42</div>
+                <div class="card-trend trend-up" style="color:var(--text-dim)">
+                    <span style="color:var(--success)">Saved $120.50</span> (99.6%)
+                </div>
+            </div>
+
+            <!-- Metric 3 -->
+            <div class="card">
+                <div class="glow-overlay"></div>
+                <div class="card-label">Local Routine</div>
+                <div class="card-value" style="color:var(--success)">98.8%</div>
+                <div class="card-trend">
+                    <span style="color:var(--text-dim)">GPU: RTX 4090 (32% Load)</span>
+                </div>
+            </div>
+
+            <!-- Metric 4 -->
+            <div class="card">
+                <div class="glow-overlay"></div>
+                <div class="card-label">Avg Latency</div>
+                <div class="card-value">180<span style="font-size:20px; color:var(--text-dim)">ms</span></div>
+                <div class="card-trend trend-up">
+                    ⚡ Instant
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid-2">
+            <!-- Main Chart -->
+            <div class="card">
+                <h2>Traffic & Cost Analysis</h2>
+                <div class="chart-container">
+                    <canvas id="mainChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Doughnut -->
+            <div class="card">
+                <h2>Model Distribution</h2>
+                <div class="chart-container"
+                    style="height:350px; display:flex; align-items:center; justify-content:center;">
+                    <canvas id="donutChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- Config ---
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = '"Inter", sans-serif';
+
+        // --- Main Chart (Line) ---
+        const ctxMain = document.getElementById('mainChart').getContext('2d');
+        const gradient = ctxMain.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(6, 182, 212, 0.2)');
+        gradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
+
+        new Chart(ctxMain, {
+            type: 'line',
+            data: {
+                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'Now'],
+                datasets: [{
+                    label: 'Requests',
+                    data: [120, 80, 450, 1200, 1800, 1400, 900],
+                    borderColor: '#06b6d4',
+                    backgroundColor: gradient,
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#06b6d4'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: '#0f172a',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#94a3b8',
+                        borderColor: 'rgba(148,163,184,0.1)',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: {
+                        grid: { color: 'rgba(148,163,184,0.05)' },
+                        border: { display: false }
+                    }
+                }
+            }
+        });
+
+        // --- Donut Chart ---
+        const ctxDonut = document.getElementById('donutChart').getContext('2d');
+        new Chart(ctxDonut, {
+            type: 'doughnut',
+            data: {
+                labels: ['Local (Llama/Deepseek)', 'Cloud (GPT-4o)', 'Cloud (O3)'],
+                datasets: [{
+                    data: [95, 4, 1],
+                    backgroundColor: [
+                        '#10b981',  // Local (Green)
+                        '#06b6d4',  // Cloud 4o (Cyan)
+                        '#8b5cf6'   // Cloud O3 (Purple)
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { padding: 20, usePointStyle: true }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

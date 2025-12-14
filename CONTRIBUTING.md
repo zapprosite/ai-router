@@ -1,16 +1,16 @@
 # Contributing Guide
 
 ## 🛠️ Development Setup
-1. **Install Dependencies**:
+## 🛠️ Development Setup
+1. **Quick Start**:
     ```bash
-    python3 -m venv .venv
+    make venv
     source .venv/bin/activate
-    pip install -r requirements.txt
-    pip install -e . # Install as package
     ```
-2. **Setup Tools**:
+
+2. **Validate Setup**:
     ```bash
-    pip install ruff pytest
+    make verify
     ```
 
 ## ✅ Verification
