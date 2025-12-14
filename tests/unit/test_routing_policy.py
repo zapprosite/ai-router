@@ -44,6 +44,8 @@ class TestRoutingPolicyCloudGating:
                             },
                             "attempts": [{"model": "deepseek-coder-v2-16b", "status": "success"}]
                         }
+                    async def ainvoke(self, state, **kwargs):
+                        return self.invoke(state)
                 
                 original_router = m.router_app
                 m.router_app = LocalOnlyMockRouter()
@@ -124,6 +126,8 @@ class TestRoutingPolicyCloudGating:
                                 {"model": "gpt-4o-mini", "status": "success"}
                             ]
                         }
+                    async def ainvoke(self, state, **kwargs):
+                        return self.invoke(state)
                 
                 original_router = m.router_app
                 m.router_app = CloudEscalationMockRouter()

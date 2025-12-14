@@ -17,6 +17,8 @@ def test_chat_completions_openai_shim(monkeypatch):
                 "output": "OK RESULT",
                 "usage": {"resolved_model_id": "dummy-model"},
             }
+        async def ainvoke(self, state, **kwargs):
+            return self.invoke(state)
 
     m.router_app = DummyRouter()
     client = TestClient(m.app)

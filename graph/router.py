@@ -488,7 +488,8 @@ def _build_fallback_chain(primary: str, fallbacks: List[str]):
     return primary_chain
 
 # Dynamic branch based on model_id
-def _model_branch(x: Dict[str, Any]) -> Any:
+# Dynamic branch based on model_id
+async def _model_branch(x: Dict[str, Any]) -> Any:
     """Route to the appropriate chain based on model_id."""
     model_id = x.get("model_id", "llama-3.1-8b-instruct")
     chain = _get_chain(model_id)
@@ -499,7 +500,7 @@ def _model_branch(x: Dict[str, Any]) -> Any:
     elif model_id == "deepseek-coder-v2-16b" and _fallback_enabled():
         chain = chain.with_fallbacks([_get_chain("gpt-5.2-codex-high")])
     
-    return chain.invoke({"messages": x["messages"]})
+    return await chain.ainvoke({"messages": x["messages"]})
 
 BRANCH = RunnableLambda(_model_branch)
 
@@ -515,12 +516,12 @@ def _sla_wrap(runnable):
     else:
         threshold = float(SLA.get("latency_sec", 6))
     
-    def _call(x: Dict[str, Any]):
+    async def _call(x: Dict[str, Any]):
         start = time.perf_counter()
         model_id = x.get("model_id", "llama-3.1-8b-instruct")
         
         try:
-            out = runnable.invoke(x)
+            out = await runnable.ainvoke(x)
             took = time.perf_counter() - start
             
             if took > threshold and _fallback_enabled():
@@ -538,7 +539,7 @@ def _sla_wrap(runnable):
                 for fb_model in fallback_models:
                     try:
                         fb_chain = _get_chain(fb_model)
-                        return fb_chain.invoke({"messages": x["messages"]})
+                        return await fb_chain.ainvoke({"messages": x["messages"]})
                     except Exception as fb_err:
                         logger.error(f"Fallback {fb_model} failed: {fb_err}")
                         continue
@@ -621,7 +622,7 @@ def _evaluate_response(task: str, text: str) -> Tuple[bool, str]:
     return True, "ok"
 
 
-def _node_invoke(state: RouterState) -> RouterState:
+async def _node_invoke(state: RouterState) -> RouterState:
     """Invoke the selected model with quality gating and fallback."""
     wrapped = _sla_wrap(BRANCH)
     current_model = state.get("model_id", "llama-3.1-8b-instruct")
@@ -655,10 +656,13 @@ def _node_invoke(state: RouterState) -> RouterState:
             
             if provider == "ollama":
                 # Run with GPU Queue limits
-                out_chain = await run_on_gpu(wrapped.invoke, {"messages": state["messages"], "model_id": current_model})
+                out_chain = await run_on_gpu(
+                    wrapped.ainvoke, 
+                    {"messages": state["messages"], "model_id": current_model}
+                )
             else:
                 # Cloud/API runs directly without blocking GPU queue
-                out_chain = wrapped.invoke({"messages": state["messages"], "model_id": current_model})
+                out_chain = await wrapped.ainvoke({"messages": state["messages"], "model_id": current_model})
             
             out_text = str(out_chain) 
             

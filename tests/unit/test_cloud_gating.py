@@ -41,6 +41,8 @@ class TestCloudGating:
                         "output": "Local response",
                         "usage": {"resolved_model_id": "local-chat", "cloud_available": False}
                     }
+                async def ainvoke(self, state, **kwargs):
+                    return self.invoke(state)
             
             original_router = m.router_app
             m.router_app = LocalOnlyRouter()
@@ -78,6 +80,8 @@ class TestCloudGating:
                         "output": "Cloud response (mocked)",
                         "usage": {"resolved_model_id": "gpt-4o-mini", "cloud_available": True}
                     }
+                async def ainvoke(self, state, **kwargs):
+                    return self.invoke(state)
             
             original_router = m.router_app
             m.router_app = CloudEnabledRouter()

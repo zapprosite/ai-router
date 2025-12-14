@@ -44,6 +44,8 @@ class TestAPIKeySecurity:
                     "output": "Test response",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         original_router = m.router_app
         m.router_app = DummyRouter()
         
@@ -72,6 +74,8 @@ class TestAPIKeySecurity:
                     "output": "Test response",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         original_router = m.router_app
         m.router_app = DummyRouter()
         
@@ -96,6 +100,8 @@ class TestAPIKeySecurity:
                     "output": "Test response",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
 
         original_router = m.router_app
         m.router_app = DummyRouter()
@@ -181,6 +187,8 @@ class TestRoutingBasic:
                     "output": "Smoke test OK",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 5}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
 
         original_router = m.router_app
         m.router_app = DummyRouter()
@@ -210,6 +218,8 @@ class TestRoutingBasic:
                     "output": "Response",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 5}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
 
         original_router = m.router_app
         m.router_app = CapturingRouter()
@@ -240,6 +250,8 @@ class TestRoutingBasic:
                     "output": "def hello(): pass",
                     "usage": {"resolved_model_id": "local-code", "latency_ms_router": 5}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
 
         original_router = m.router_app
         m.router_app = CapturingRouter()
@@ -307,6 +319,8 @@ class TestResponsesAPI:
                     "output": "Responses API OK",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         original_router = m.router_app
         m.router_app = DummyRouter()
 
@@ -346,6 +360,8 @@ class TestResponsesAPI:
                     "output": "Codex Format OK",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         original_router = m.router_app
         m.router_app = DummyRouter()
 
@@ -380,6 +396,8 @@ class TestResponsesAPI:
                     "output": "Responses List OK",
                     "usage": {"resolved_model_id": "local-chat", "latency_ms_router": 10}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         original_router = m.router_app
         m.router_app = DummyRouter()
 
@@ -428,6 +446,8 @@ class TestResponsesAPI:
                     "type": "upstream_error",
                     "error": "Upstream Error 402: deactivated_workspace"
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         original_router = m.router_app
         m.router_app = ErrorRouter()
 

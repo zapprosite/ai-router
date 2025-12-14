@@ -42,6 +42,8 @@ class TestCascadeQualityGate:
                     "output": "Second response (passes quality)",
                     "usage": {"resolved_model_id": "local-code", "escalated": True}
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         
         original_router = m.router_app
         m.router_app = EscalatingRouter()
@@ -78,6 +80,8 @@ class TestCascadeQualityGate:
                         {"model": "local-code", "status": "success"}
                     ]
                 }
+            async def ainvoke(self, state, **kwargs):
+                return self.invoke(state)
         
         original_router = m.router_app
         m.router_app = MaxAttemptsRouter()
